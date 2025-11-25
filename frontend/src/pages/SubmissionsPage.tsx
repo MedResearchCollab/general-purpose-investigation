@@ -82,15 +82,33 @@ const SubmissionsPage: React.FC = () => {
   const fetchStudies = async () => {
     try {
       const response = await api.get('/api/studies');
-      const studiesData = await Promise.all(
+      // Fetch full details for each study (with forms) but handle errors gracefully
+      const studiesData = await Promise.allSettled(
         response.data.map(async (study: Study) => {
-          const detailResponse = await api.get(`/api/studies/${study.id}`);
-          return detailResponse.data;
+          try {
+            const detailResponse = await api.get(`/api/studies/${study.id}`);
+            return detailResponse.data;
+          } catch (err: any) {
+            // If detail fetch fails, return the basic study data
+            console.warn(`Failed to fetch details for study ${study.id}:`, err);
+            return {
+              ...study,
+              forms: [],
+              is_active: study.is_active ?? true,
+            };
+          }
         })
       );
-      setStudies(studiesData.filter((s: Study) => s.is_active !== false));
+      
+      // Extract successful results - show all studies (including inactive ones) for submission creation
+      const successfulStudies = studiesData
+        .map((result) => (result.status === 'fulfilled' ? result.value : null))
+        .filter((s): s is Study => s !== null);
+      
+      setStudies(successfulStudies);
     } catch (err: any) {
       console.error('Failed to fetch studies:', err);
+      setError(err.response?.data?.detail || 'Failed to fetch studies');
     }
   };
 
@@ -130,6 +148,18 @@ const SubmissionsPage: React.FC = () => {
     }
   };
 
+  const refreshStudyDetails = async (studyId: number) => {
+    try {
+      const detailResponse = await api.get(`/api/studies/${studyId}`);
+      const updatedStudy = detailResponse.data;
+      setStudies((prevStudies) =>
+        prevStudies.map((s) => (s.id === studyId ? updatedStudy : s))
+      );
+    } catch (err: any) {
+      console.error(`Failed to refresh study ${studyId} details:`, err);
+    }
+  };
+
   const getAvailableForms = () => {
     if (!selectedStudy) return [];
     const study = studies.find((s) => s.id === selectedStudy);
@@ -165,9 +195,12 @@ const SubmissionsPage: React.FC = () => {
             <InputLabel>Study</InputLabel>
             <Select
               value={selectedStudy}
-              onChange={(e) => {
-                setSelectedStudy(e.target.value as number);
+              onChange={async (e) => {
+                const studyId = e.target.value as number;
+                setSelectedStudy(studyId);
                 setSelectedForm(null);
+                // Refresh study details to get latest forms
+                await refreshStudyDetails(studyId);
               }}
               label="Study"
             >
@@ -188,14 +221,26 @@ const SubmissionsPage: React.FC = () => {
                   setSelectedForm(form || null);
                 }}
                 label="Form"
+                disabled={getAvailableForms().length === 0}
               >
-                {getAvailableForms().map((form) => (
-                  <MenuItem key={form.id} value={form.id}>
-                    {form.name}
+                {getAvailableForms().length > 0 ? (
+                  getAvailableForms().map((form) => (
+                    <MenuItem key={form.id} value={form.id}>
+                      {form.name}
+                    </MenuItem>
+                  ))
+                ) : (
+                  <MenuItem disabled value="">
+                    No forms assigned
                   </MenuItem>
-                ))}
+                )}
               </Select>
             </FormControl>
+          )}
+          {selectedStudy && getAvailableForms().length === 0 && (
+            <Alert severity="info" sx={{ mt: 1 }}>
+              No forms are assigned to this study. Please assign a form to this study on the Studies page first.
+            </Alert>
           )}
           {selectedForm && selectedStudy && (
             <Button

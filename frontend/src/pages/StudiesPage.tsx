@@ -66,14 +66,32 @@ const StudiesPage: React.FC = () => {
   const fetchStudies = async () => {
     try {
       const response = await api.get('/api/studies');
-      const studiesData = await Promise.all(
+      // Fetch full details for each study (with forms) but handle errors gracefully
+      const studiesData = await Promise.allSettled(
         response.data.map(async (study: Study) => {
-          const detailResponse = await api.get(`/api/studies/${study.id}`);
-          return detailResponse.data;
+          try {
+            const detailResponse = await api.get(`/api/studies/${study.id}`);
+            return detailResponse.data;
+          } catch (err: any) {
+            // If detail fetch fails, return the basic study data
+            console.warn(`Failed to fetch details for study ${study.id}:`, err);
+            return {
+              ...study,
+              forms: [],
+              is_active: study.is_active ?? true,
+            };
+          }
         })
       );
-      setStudies(studiesData);
+      
+      // Extract successful results
+      const successfulStudies = studiesData
+        .map((result) => (result.status === 'fulfilled' ? result.value : null))
+        .filter((s): s is Study => s !== null);
+      
+      setStudies(successfulStudies);
     } catch (err: any) {
+      console.error('Failed to fetch studies:', err);
       setError(err.response?.data?.detail || 'Failed to fetch studies');
     } finally {
       setLoading(false);

@@ -64,6 +64,19 @@ def get_study(
     form_ids = [sf.form_id for sf in study_forms]
     forms = db.query(Form).filter(Form.id.in_(form_ids)).all()
     
+    # Serialize forms to dictionaries
+    forms_data = [
+        {
+            "id": form.id,
+            "name": form.name,
+            "description": form.description,
+            "schema_json": form.schema_json,
+            "created_by": form.created_by,
+            "created_at": form.created_at
+        }
+        for form in forms
+    ]
+    
     study_dict = {
         "id": study.id,
         "name": study.name,
@@ -71,7 +84,7 @@ def get_study(
         "is_active": study.is_active,
         "created_by": study.created_by,
         "created_at": study.created_at,
-        "forms": forms
+        "forms": forms_data
     }
     
     return study_dict
