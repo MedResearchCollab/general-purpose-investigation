@@ -41,11 +41,25 @@ const FormRenderer: React.FC<FormRendererProps> = ({
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const validateField = (field: FormFieldDef, value: any): string | null => {
+    // For checkboxes, false is a valid value (not required means it can be false)
+    if (field.type === 'checkbox') {
+      if (field.required && value !== true) {
+        return `${field.label} is required`;
+      }
+      return null;
+    }
+
+    // For other fields, check if required
     if (field.required && (value === null || value === undefined || value === '')) {
       return `${field.label} is required`;
     }
 
-    if (field.type === 'number' && value !== null && value !== undefined && value !== '') {
+    // Skip validation if field is empty and not required
+    if (value === null || value === undefined || value === '') {
+      return null;
+    }
+
+    if (field.type === 'number') {
       const num = Number(value);
       if (isNaN(num)) {
         return `${field.label} must be a number`;
@@ -58,11 +72,15 @@ const FormRenderer: React.FC<FormRendererProps> = ({
       }
     }
 
-    if (field.type === 'text' && field.validation?.pattern && value) {
+    if (field.type === 'text' && field.validation?.pattern) {
       const regex = new RegExp(field.validation.pattern);
       if (!regex.test(value)) {
         return `${field.label} format is invalid`;
       }
+    }
+
+    if (field.type === 'date' && value instanceof Date && isNaN(value.getTime())) {
+      return `${field.label} is not a valid date`;
     }
 
     return null;
@@ -83,6 +101,22 @@ const FormRenderer: React.FC<FormRendererProps> = ({
     }
   };
 
+  const formatDataForSubmission = (data: Record<string, any>): Record<string, any> => {
+    const formatted: Record<string, any> = {};
+    
+    Object.keys(data).forEach((key) => {
+      const value = data[key];
+      // Convert Date objects to ISO strings
+      if (value instanceof Date) {
+        formatted[key] = value.toISOString().split('T')[0]; // Format as YYYY-MM-DD
+      } else {
+        formatted[key] = value;
+      }
+    });
+    
+    return formatted;
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const newErrors: Record<string, string> = {};
@@ -96,10 +130,18 @@ const FormRenderer: React.FC<FormRendererProps> = ({
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
+      // Scroll to first error
+      const firstErrorField = Object.keys(newErrors)[0];
+      const errorElement = document.querySelector(`[name="${firstErrorField}"]`);
+      if (errorElement) {
+        errorElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
       return;
     }
 
-    onSubmit(formData);
+    // Format data before submission (especially dates)
+    const formattedData = formatDataForSubmission(formData);
+    onSubmit(formattedData);
   };
 
   return (

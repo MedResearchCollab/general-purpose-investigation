@@ -63,6 +63,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ onSubmit, initialData }) => {
     type: 'text',
     required: false,
   });
+  const [optionsInput, setOptionsInput] = useState<string>('');
 
   const handleAddField = () => {
     setCurrentField({
@@ -71,12 +72,14 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ onSubmit, initialData }) => {
       type: 'text',
       required: false,
     });
+    setOptionsInput('');
     setEditingIndex(null);
     setDialogOpen(true);
   };
 
   const handleEditField = (index: number) => {
     setCurrentField(fields[index]);
+    setOptionsInput(fields[index].options?.join(', ') || '');
     setEditingIndex(index);
     setDialogOpen(true);
   };
@@ -86,16 +89,25 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ onSubmit, initialData }) => {
       return;
     }
 
+    // Process options from the input string
+    const fieldToSave = { ...currentField };
+    if ((currentField.type === 'select' || currentField.type === 'radio') && optionsInput.trim()) {
+      fieldToSave.options = optionsInput.split(',').map((opt) => opt.trim()).filter(Boolean);
+    } else if (currentField.type !== 'select' && currentField.type !== 'radio') {
+      fieldToSave.options = undefined;
+    }
+
     if (editingIndex !== null) {
       const newFields = [...fields];
-      newFields[editingIndex] = currentField;
+      newFields[editingIndex] = fieldToSave;
       setFields(newFields);
     } else {
-      setFields([...fields, currentField]);
+      setFields([...fields, fieldToSave]);
     }
 
     setDialogOpen(false);
     setEditingIndex(null);
+    setOptionsInput('');
   };
 
   const handleDeleteField = (index: number) => {
@@ -202,7 +214,12 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ onSubmit, initialData }) => {
               <InputLabel>Field Type</InputLabel>
               <Select
                 value={currentField.type}
-                onChange={(e) => setCurrentField({ ...currentField, type: e.target.value, options: undefined })}
+                onChange={(e) => {
+                  setCurrentField({ ...currentField, type: e.target.value, options: undefined });
+                  if (e.target.value !== 'select' && e.target.value !== 'radio') {
+                    setOptionsInput('');
+                  }
+                }}
                 label="Field Type"
               >
                 {fieldTypes.map((type) => (
@@ -224,14 +241,10 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ onSubmit, initialData }) => {
             {(currentField.type === 'select' || currentField.type === 'radio') && (
               <TextField
                 label="Options (comma-separated)"
-                value={currentField.options?.join(', ') || ''}
-                onChange={(e) =>
-                  setCurrentField({
-                    ...currentField,
-                    options: e.target.value.split(',').map((opt) => opt.trim()).filter(Boolean),
-                  })
-                }
-                helperText="Enter options separated by commas"
+                value={optionsInput}
+                onChange={(e) => setOptionsInput(e.target.value)}
+                helperText="Enter options separated by commas (e.g., Option 1, Option 2, Option 3)"
+                fullWidth
               />
             )}
             <TextField

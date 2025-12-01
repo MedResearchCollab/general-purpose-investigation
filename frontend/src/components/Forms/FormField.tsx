@@ -10,6 +10,7 @@ import {
   Radio,
   RadioGroup,
   FormLabel,
+  FormHelperText,
 } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -112,6 +113,7 @@ const FormField: React.FC<FormFieldProps> = ({ field, value, onChange, error }) 
               </MenuItem>
             ))}
           </Select>
+          {error && <FormHelperText>{error}</FormHelperText>}
         </FormControl>
       );
 
@@ -132,6 +134,7 @@ const FormField: React.FC<FormFieldProps> = ({ field, value, onChange, error }) 
               />
             ))}
           </RadioGroup>
+          {error && <FormHelperText error>{error}</FormHelperText>}
         </FormControl>
       );
 

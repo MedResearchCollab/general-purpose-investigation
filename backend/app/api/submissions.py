@@ -87,22 +87,43 @@ def create_submission(
             detail="Form is not assigned to this study"
         )
     
-    # Encrypt submission data
-    encrypted_data = encrypt_data(submission_data.data_json)
+    try:
+        # Encrypt submission data
+        encrypted_data = encrypt_data(submission_data.data_json)
+    except Exception as e:
+        print(f"Encryption error: {e}")  # Debug logging
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to encrypt submission data: {str(e)}"
+        )
     
-    new_submission = Submission(
-        form_id=submission_data.form_id,
-        study_id=submission_data.study_id,
-        user_id=current_user.id,
-        data_json=encrypted_data
-    )
+    try:
+        new_submission = Submission(
+            form_id=submission_data.form_id,
+            study_id=submission_data.study_id,
+            user_id=current_user.id,
+            data_json=encrypted_data
+        )
+        
+        db.add(new_submission)
+        db.commit()
+        db.refresh(new_submission)
+    except Exception as e:
+        db.rollback()
+        print(f"Database error creating submission: {e}")  # Debug logging
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to save submission: {str(e)}"
+        )
     
-    db.add(new_submission)
-    db.commit()
-    db.refresh(new_submission)
+    try:
+        # Return decrypted data
+        decrypted_data = decrypt_data(new_submission.data_json)
+    except Exception as e:
+        print(f"Decryption error: {e}")  # Debug logging
+        # Return encrypted data if decryption fails (shouldn't happen, but handle gracefully)
+        decrypted_data = {}
     
-    # Return decrypted data
-    decrypted_data = decrypt_data(new_submission.data_json)
     return {
         "id": new_submission.id,
         "form_id": new_submission.form_id,

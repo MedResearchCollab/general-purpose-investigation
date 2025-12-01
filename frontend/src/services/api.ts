@@ -7,6 +7,7 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  timeout: 10000, // 10 second timeout
 });
 
 // Add token to requests
@@ -18,10 +19,23 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Handle token expiration
+// Handle token expiration and network errors
 api.interceptors.response.use(
   (response) => response,
   (error) => {
+    // Log error for debugging
+    if (!error.response) {
+      console.error('Network error:', {
+        message: error.message,
+        code: error.code,
+        config: {
+          url: error.config?.url,
+          baseURL: error.config?.baseURL,
+          method: error.config?.method,
+        }
+      });
+    }
+    
     if (error.response?.status === 401) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');

@@ -13,13 +13,29 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# CORS middleware
+# CORS middleware - must be added before other middleware
+# Get CORS origins from settings
+cors_origins = settings.cors_origins_list
+print(f"CORS Origins configured: {cors_origins}")  # Debug log
+
+# Explicitly list allowed headers (wildcard might not work in all cases)
+allowed_headers = [
+    "Accept",
+    "Accept-Language",
+    "Content-Language",
+    "Content-Type",
+    "Authorization",
+    "X-Requested-With",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins_list,
+    allow_origins=cors_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+    allow_headers=allowed_headers,
+    expose_headers=["*"],
+    max_age=3600,
 )
 
 # Include routers
