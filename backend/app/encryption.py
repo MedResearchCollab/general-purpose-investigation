@@ -32,8 +32,17 @@ def encrypt_data(data: dict) -> str:
 
 def decrypt_data(encrypted_data: str) -> dict:
     """Decrypt sensitive data"""
-    key = get_encryption_key()
-    f = Fernet(key)
-    decrypted = f.decrypt(encrypted_data.encode())
-    return json.loads(decrypted.decode())
+    try:
+        key = get_encryption_key()
+        f = Fernet(key)
+        # Handle both string and bytes input
+        if isinstance(encrypted_data, bytes):
+            encrypted_bytes = encrypted_data
+        else:
+            encrypted_bytes = encrypted_data.encode()
+        decrypted = f.decrypt(encrypted_bytes)
+        return json.loads(decrypted.decode())
+    except Exception as e:
+        print(f"Decryption error: {e}, data type: {type(encrypted_data)}, data length: {len(str(encrypted_data)) if encrypted_data else 0}")
+        raise
 

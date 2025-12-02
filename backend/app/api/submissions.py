@@ -33,6 +33,7 @@ def list_submissions(
     
     # Decrypt submission data
     result = []
+    decryption_errors = []
     for submission in submissions:
         try:
             decrypted_data = decrypt_data(submission.data_json)
@@ -46,8 +47,24 @@ def list_submissions(
                 "updated_at": submission.updated_at
             })
         except Exception as e:
-            # Skip corrupted submissions
-            continue
+            # Log decryption errors but don't fail the entire request
+            error_msg = f"Failed to decrypt submission {submission.id}: {str(e)}"
+            print(error_msg)  # Debug logging
+            decryption_errors.append(submission.id)
+            # Still include the submission but with empty data_json to indicate decryption failure
+            result.append({
+                "id": submission.id,
+                "form_id": submission.form_id,
+                "study_id": submission.study_id,
+                "user_id": submission.user_id,
+                "data_json": {},  # Empty dict to indicate decryption failure
+                "created_at": submission.created_at,
+                "updated_at": submission.updated_at,
+                "_decryption_error": True
+            })
+    
+    if decryption_errors:
+        print(f"Warning: {len(decryption_errors)} submissions had decryption errors: {decryption_errors}")
     
     return result
 
@@ -157,7 +174,15 @@ def get_submission(
         )
     
     # Decrypt data
-    decrypted_data = decrypt_data(submission.data_json)
+    try:
+        decrypted_data = decrypt_data(submission.data_json)
+    except Exception as e:
+        print(f"Decryption error for submission {submission_id}: {e}")  # Debug logging
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to decrypt submission data: {str(e)}"
+        )
+    
     return {
         "id": submission.id,
         "form_id": submission.form_id,
@@ -199,7 +224,15 @@ def update_submission(
     db.refresh(submission)
     
     # Return decrypted data
-    decrypted_data = decrypt_data(submission.data_json)
+    try:
+        decrypted_data = decrypt_data(submission.data_json)
+    except Exception as e:
+        print(f"Decryption error for submission {submission_id} during update: {e}")  # Debug logging
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to decrypt submission data: {str(e)}"
+        )
+    
     return {
         "id": submission.id,
         "form_id": submission.form_id,

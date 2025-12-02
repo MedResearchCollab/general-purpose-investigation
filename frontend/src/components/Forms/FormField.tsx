@@ -31,13 +31,16 @@ interface FormFieldProps {
     };
   };
   value: any;
-  onChange: (value: any) => void;
+  onChange?: (value: any) => void;
   error?: string;
+  disabled?: boolean;
 }
 
-const FormField: React.FC<FormFieldProps> = ({ field, value, onChange, error }) => {
+const FormField: React.FC<FormFieldProps> = ({ field, value, onChange, error, disabled = false }) => {
   const handleChange = (newValue: any) => {
-    onChange(newValue);
+    if (onChange && !disabled) {
+      onChange(newValue);
+    }
   };
 
   switch (field.type) {
@@ -56,6 +59,7 @@ const FormField: React.FC<FormFieldProps> = ({ field, value, onChange, error }) 
           rows={field.type === 'textarea' ? 4 : 1}
           error={!!error}
           helperText={error}
+          disabled={disabled}
         />
       );
 
@@ -76,6 +80,7 @@ const FormField: React.FC<FormFieldProps> = ({ field, value, onChange, error }) 
           }}
           error={!!error}
           helperText={error}
+          disabled={disabled}
         />
       );
 
@@ -86,12 +91,14 @@ const FormField: React.FC<FormFieldProps> = ({ field, value, onChange, error }) 
             label={field.label}
             value={value || null}
             onChange={(newValue) => handleChange(newValue)}
+            disabled={disabled}
             slotProps={{
               textField: {
                 fullWidth: true,
                 required: field.required,
                 error: !!error,
                 helperText: error,
+                disabled: disabled,
               },
             }}
           />
@@ -100,12 +107,13 @@ const FormField: React.FC<FormFieldProps> = ({ field, value, onChange, error }) 
 
     case 'select':
       return (
-        <FormControl fullWidth required={field.required} error={!!error}>
+        <FormControl fullWidth required={field.required} error={!!error} disabled={disabled}>
           <InputLabel>{field.label}</InputLabel>
           <Select
             value={value || ''}
             onChange={(e) => handleChange(e.target.value)}
             label={field.label}
+            disabled={disabled}
           >
             {field.options?.map((option) => (
               <MenuItem key={option} value={option}>
@@ -119,7 +127,7 @@ const FormField: React.FC<FormFieldProps> = ({ field, value, onChange, error }) 
 
     case 'radio':
       return (
-        <FormControl component="fieldset" required={field.required} error={!!error}>
+        <FormControl component="fieldset" required={field.required} error={!!error} disabled={disabled}>
           <FormLabel component="legend">{field.label}</FormLabel>
           <RadioGroup
             value={value || ''}
@@ -129,8 +137,9 @@ const FormField: React.FC<FormFieldProps> = ({ field, value, onChange, error }) 
               <FormControlLabel
                 key={option}
                 value={option}
-                control={<Radio />}
+                control={<Radio disabled={disabled} />}
                 label={option}
+                disabled={disabled}
               />
             ))}
           </RadioGroup>
@@ -145,9 +154,11 @@ const FormField: React.FC<FormFieldProps> = ({ field, value, onChange, error }) 
             <Checkbox
               checked={value || false}
               onChange={(e) => handleChange(e.target.checked)}
+              disabled={disabled}
             />
           }
           label={field.label}
+          disabled={disabled}
         />
       );
 
@@ -162,6 +173,7 @@ const FormField: React.FC<FormFieldProps> = ({ field, value, onChange, error }) 
           required={field.required}
           error={!!error}
           helperText={error}
+          disabled={disabled}
         />
       );
   }

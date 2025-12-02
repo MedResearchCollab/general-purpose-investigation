@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Paper,
   Box,
@@ -26,9 +26,10 @@ interface FormRendererProps {
   schema: {
     fields: FormFieldDef[];
   };
-  onSubmit: (data: Record<string, any>) => void;
+  onSubmit?: (data: Record<string, any>) => void;
   initialData?: Record<string, any>;
   submitLabel?: string;
+  readOnly?: boolean;
 }
 
 const FormRenderer: React.FC<FormRendererProps> = ({
@@ -36,9 +37,17 @@ const FormRenderer: React.FC<FormRendererProps> = ({
   onSubmit,
   initialData = {},
   submitLabel = 'Submit',
+  readOnly = false,
 }) => {
   const [formData, setFormData] = useState<Record<string, any>>(initialData);
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // Update formData when initialData changes (for viewing submissions)
+  useEffect(() => {
+    if (initialData && Object.keys(initialData).length > 0) {
+      setFormData(initialData);
+    }
+  }, [initialData]);
 
   const validateField = (field: FormFieldDef, value: any): string | null => {
     // For checkboxes, false is a valid value (not required means it can be false)
@@ -119,6 +128,8 @@ const FormRenderer: React.FC<FormRendererProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (readOnly || !onSubmit) return;
+
     const newErrors: Record<string, string> = {};
 
     schema.fields.forEach((field) => {
@@ -153,13 +164,16 @@ const FormRenderer: React.FC<FormRendererProps> = ({
               key={field.name}
               field={field}
               value={formData[field.name]}
-              onChange={(value) => handleFieldChange(field.name, value)}
+              onChange={readOnly ? undefined : (value) => handleFieldChange(field.name, value)}
               error={errors[field.name]}
+              disabled={readOnly}
             />
           ))}
-          <Button type="submit" variant="contained" size="large">
-            {submitLabel}
-          </Button>
+          {!readOnly && onSubmit && (
+            <Button type="submit" variant="contained" size="large">
+              {submitLabel}
+            </Button>
+          )}
         </Box>
       </form>
     </Paper>

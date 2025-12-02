@@ -32,14 +32,24 @@ const Dashboard: React.FC = () => {
           isAdmin ? api.get('/api/users') : Promise.resolve({ data: [] }),
         ]);
 
+        const submissionsData = submissionsRes.data || [];
+        console.log('Dashboard: Fetched submissions count:', submissionsData.length);
+
         setStats({
           studies_count: studiesRes.data.length,
           forms_count: formsRes.data.length,
-          submissions_count: submissionsRes.data.length,
+          submissions_count: submissionsData.length,
           users_count: usersRes.data.length,
         });
       } catch (error) {
         console.error('Error fetching stats:', error);
+        // Set default stats on error
+        setStats({
+          studies_count: 0,
+          forms_count: 0,
+          submissions_count: 0,
+          users_count: 0,
+        });
       } finally {
         setLoading(false);
       }
