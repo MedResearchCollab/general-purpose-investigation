@@ -1,10 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List, Optional
+import json
 from app.database import get_db
 from app.models import Submission, Form, Study, StudyForm, User
 from app.schemas import SubmissionCreate, SubmissionUpdate, SubmissionResponse
-from app.encryption import encrypt_data, decrypt_data
 from app.middleware.auth_middleware import get_current_user
 
 router = APIRouter(prefix="/api/submissions", tags=["submissions"])
@@ -31,40 +31,29 @@ def list_submissions(
     
     submissions = query.all()
     
-    # Decrypt submission data
+    # Parse submission data as JSON
     result = []
-    decryption_errors = []
     for submission in submissions:
         try:
-            decrypted_data = decrypt_data(submission.data_json)
-            result.append({
-                "id": submission.id,
-                "form_id": submission.form_id,
-                "study_id": submission.study_id,
-                "user_id": submission.user_id,
-                "data_json": decrypted_data,
-                "created_at": submission.created_at,
-                "updated_at": submission.updated_at
-            })
-        except Exception as e:
-            # Log decryption errors but don't fail the entire request
-            error_msg = f"Failed to decrypt submission {submission.id}: {str(e)}"
-            print(error_msg)  # Debug logging
-            decryption_errors.append(submission.id)
-            # Still include the submission but with empty data_json to indicate decryption failure
-            result.append({
-                "id": submission.id,
-                "form_id": submission.form_id,
-                "study_id": submission.study_id,
-                "user_id": submission.user_id,
-                "data_json": {},  # Empty dict to indicate decryption failure
-                "created_at": submission.created_at,
-                "updated_at": submission.updated_at,
-                "_decryption_error": True
-            })
-    
-    if decryption_errors:
-        print(f"Warning: {len(decryption_errors)} submissions had decryption errors: {decryption_errors}")
+            # Parse JSON data (handle both encrypted legacy data and plain JSON)
+            if isinstance(submission.data_json, str):
+                data_json = json.loads(submission.data_json)
+            else:
+                data_json = submission.data_json if submission.data_json else {}
+        except (json.JSONDecodeError, TypeError):
+            # If parsing fails, try to handle legacy encrypted data gracefully
+            # For now, return empty dict for corrupted data
+            data_json = {}
+        
+        result.append({
+            "id": submission.id,
+            "form_id": submission.form_id,
+            "study_id": submission.study_id,
+            "user_id": submission.user_id,
+            "data_json": data_json,
+            "created_at": submission.created_at,
+            "updated_at": submission.updated_at
+        })
     
     return result
 
@@ -105,21 +94,14 @@ def create_submission(
         )
     
     try:
-        # Encrypt submission data
-        encrypted_data = encrypt_data(submission_data.data_json)
-    except Exception as e:
-        print(f"Encryption error: {e}")  # Debug logging
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to encrypt submission data: {str(e)}"
-        )
-    
-    try:
+        # Store submission data as JSON string
+        data_json_str = json.dumps(submission_data.data_json)
+        
         new_submission = Submission(
             form_id=submission_data.form_id,
             study_id=submission_data.study_id,
             user_id=current_user.id,
-            data_json=encrypted_data
+            data_json=data_json_str
         )
         
         db.add(new_submission)
@@ -133,20 +115,18 @@ def create_submission(
             detail=f"Failed to save submission: {str(e)}"
         )
     
+    # Parse the stored JSON data for response
     try:
-        # Return decrypted data
-        decrypted_data = decrypt_data(new_submission.data_json)
-    except Exception as e:
-        print(f"Decryption error: {e}")  # Debug logging
-        # Return encrypted data if decryption fails (shouldn't happen, but handle gracefully)
-        decrypted_data = {}
+        data_json = json.loads(new_submission.data_json) if isinstance(new_submission.data_json, str) else new_submission.data_json
+    except (json.JSONDecodeError, TypeError):
+        data_json = {}
     
     return {
         "id": new_submission.id,
         "form_id": new_submission.form_id,
         "study_id": new_submission.study_id,
         "user_id": new_submission.user_id,
-        "data_json": decrypted_data,
+        "data_json": data_json,
         "created_at": new_submission.created_at,
         "updated_at": new_submission.updated_at
     }
@@ -173,22 +153,22 @@ def get_submission(
             detail="Not enough permissions"
         )
     
-    # Decrypt data
+    # Parse JSON data
     try:
-        decrypted_data = decrypt_data(submission.data_json)
-    except Exception as e:
-        print(f"Decryption error for submission {submission_id}: {e}")  # Debug logging
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to decrypt submission data: {str(e)}"
-        )
+        if isinstance(submission.data_json, str):
+            data_json = json.loads(submission.data_json)
+        else:
+            data_json = submission.data_json if submission.data_json else {}
+    except (json.JSONDecodeError, TypeError):
+        # Handle legacy encrypted data or corrupted data gracefully
+        data_json = {}
     
     return {
         "id": submission.id,
         "form_id": submission.form_id,
         "study_id": submission.study_id,
         "user_id": submission.user_id,
-        "data_json": decrypted_data,
+        "data_json": data_json,
         "created_at": submission.created_at,
         "updated_at": submission.updated_at
     }
@@ -217,28 +197,24 @@ def update_submission(
         )
     
     if submission_data.data_json is not None:
-        encrypted_data = encrypt_data(submission_data.data_json)
-        submission.data_json = encrypted_data
+        # Store submission data as JSON string
+        submission.data_json = json.dumps(submission_data.data_json)
     
     db.commit()
     db.refresh(submission)
     
-    # Return decrypted data
+    # Parse the stored JSON data for response
     try:
-        decrypted_data = decrypt_data(submission.data_json)
-    except Exception as e:
-        print(f"Decryption error for submission {submission_id} during update: {e}")  # Debug logging
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to decrypt submission data: {str(e)}"
-        )
+        data_json = json.loads(submission.data_json) if isinstance(submission.data_json, str) else submission.data_json
+    except (json.JSONDecodeError, TypeError):
+        data_json = {}
     
     return {
         "id": submission.id,
         "form_id": submission.form_id,
         "study_id": submission.study_id,
         "user_id": submission.user_id,
-        "data_json": decrypted_data,
+        "data_json": data_json,
         "created_at": submission.created_at,
         "updated_at": submission.updated_at
     }

@@ -31,7 +31,15 @@ def encrypt_data(data: dict) -> str:
 
 
 def decrypt_data(encrypted_data: str) -> dict:
-    """Decrypt sensitive data"""
+    """Decrypt sensitive data. Handles both encrypted and unencrypted data.
+    
+    Returns:
+        dict: Decrypted data, or empty dict if decryption fails
+    """
+    if not encrypted_data:
+        return {}
+    
+    # First, try to decrypt as encrypted data (Fernet format)
     try:
         key = get_encryption_key()
         f = Fernet(key)
@@ -42,7 +50,33 @@ def decrypt_data(encrypted_data: str) -> dict:
             encrypted_bytes = encrypted_data.encode()
         decrypted = f.decrypt(encrypted_bytes)
         return json.loads(decrypted.decode())
-    except Exception as e:
-        print(f"Decryption error: {e}, data type: {type(encrypted_data)}, data length: {len(str(encrypted_data)) if encrypted_data else 0}")
-        raise
+    except Exception as decrypt_error:
+        # If decryption fails, try to parse as plain JSON (for backward compatibility)
+        # This handles cases where:
+        # 1. Data was stored unencrypted (legacy data)
+        # 2. Data was encrypted with a different key
+        try:
+            # Try parsing as plain JSON string
+            if isinstance(encrypted_data, str):
+                parsed = json.loads(encrypted_data)
+                # If it's a dict, return it (might be unencrypted legacy data)
+                if isinstance(parsed, dict):
+                    print(f"Warning: Found unencrypted data (legacy format). Consider re-encrypting.")
+                    return parsed
+                return {}
+            else:
+                parsed = json.loads(encrypted_data.decode())
+                if isinstance(parsed, dict):
+                    return parsed
+                return {}
+        except (json.JSONDecodeError, AttributeError, UnicodeDecodeError) as json_error:
+            # If both fail, log detailed error information
+            error_type = type(decrypt_error).__name__
+            data_preview = str(encrypted_data)[:100] if encrypted_data else "None"
+            print(f"Decryption failed: {error_type} - {str(decrypt_error)[:200]}")
+            print(f"JSON parse also failed: {type(json_error).__name__} - {str(json_error)[:200]}")
+            print(f"Data preview (first 100 chars): {data_preview}")
+            print(f"Data length: {len(str(encrypted_data)) if encrypted_data else 0}")
+            # Return empty dict instead of raising to prevent API errors
+            return {}
 

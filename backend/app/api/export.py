@@ -9,7 +9,6 @@ import io
 from app.database import get_db
 from app.models import Submission, User
 from app.schemas import ExportRequest
-from app.encryption import decrypt_data
 from app.middleware.auth_middleware import get_current_admin_user
 
 router = APIRouter(prefix="/api/export", tags=["export"])
@@ -63,7 +62,12 @@ def export_csv(
     # Write data
     for submission in submissions:
         try:
-            decrypted_data = decrypt_data(submission.data_json)
+            # Parse JSON data
+            if isinstance(submission.data_json, str):
+                data_json = json.loads(submission.data_json)
+            else:
+                data_json = submission.data_json if submission.data_json else {}
+            
             user = db.query(User).filter(User.id == submission.user_id).first()
             writer.writerow([
                 submission.id,
@@ -74,7 +78,7 @@ def export_csv(
                 user.hospital_id if user else "",
                 submission.created_at.isoformat() if submission.created_at else "",
                 submission.updated_at.isoformat() if submission.updated_at else "",
-                json.dumps(decrypted_data)
+                json.dumps(data_json)
             ])
         except Exception as e:
             # Skip corrupted submissions
@@ -134,7 +138,12 @@ def export_json(
     
     for submission in submissions:
         try:
-            decrypted_data = decrypt_data(submission.data_json)
+            # Parse JSON data
+            if isinstance(submission.data_json, str):
+                data_json = json.loads(submission.data_json)
+            else:
+                data_json = submission.data_json if submission.data_json else {}
+            
             user = db.query(User).filter(User.id == submission.user_id).first()
             export_data["submissions"].append({
                 "id": submission.id,
@@ -146,7 +155,7 @@ def export_json(
                     "full_name": user.full_name if user else None,
                     "hospital_id": user.hospital_id if user else None
                 },
-                "data": decrypted_data,
+                "data": data_json,
                 "created_at": submission.created_at.isoformat() if submission.created_at else None,
                 "updated_at": submission.updated_at.isoformat() if submission.updated_at else None
             })

@@ -81,7 +81,7 @@ class Submission(Base):
     form_id = Column(Integer, ForeignKey("forms.id"), nullable=False)
     study_id = Column(Integer, ForeignKey("studies.id"), nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    data_json = Column(Text, nullable=False)  # Encrypted form data
+    data_json = Column(Text, nullable=False)  # JSON form data
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
