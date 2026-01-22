@@ -28,6 +28,8 @@ import {
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
+import ArchiveIcon from '@mui/icons-material/Archive';
+import UnarchiveIcon from '@mui/icons-material/Unarchive';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 
@@ -36,6 +38,7 @@ interface Study {
   name: string;
   description: string;
   is_active: boolean;
+  is_archived?: boolean;
   created_at: string;
   forms?: Form[];
 }
@@ -51,21 +54,25 @@ const StudiesPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [assignDialogOpen, setAssignDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [editingStudy, setEditingStudy] = useState<Study | null>(null);
   const [selectedStudy, setSelectedStudy] = useState<Study | null>(null);
+  const [studyToDelete, setStudyToDelete] = useState<Study | null>(null);
   const [selectedFormId, setSelectedFormId] = useState<number | ''>('');
   const [formData, setFormData] = useState({ name: '', description: '', is_active: true });
   const [error, setError] = useState('');
+  const [showArchived, setShowArchived] = useState(false);
   const { isAdmin } = useAuth();
 
   useEffect(() => {
     fetchStudies();
     fetchForms();
-  }, []);
+  }, [showArchived]);
 
   const fetchStudies = async () => {
     try {
-      const response = await api.get('/api/studies');
+      const params = showArchived ? { include_archived: true } : {};
+      const response = await api.get('/api/studies', { params });
       // Fetch full details for each study (with forms) but handle errors gracefully
       const studiesData = await Promise.allSettled(
         response.data.map(async (study: Study) => {
@@ -79,6 +86,7 @@ const StudiesPage: React.FC = () => {
               ...study,
               forms: [],
               is_active: study.is_active ?? true,
+              is_archived: study.is_archived ?? false,
             };
           }
         })
@@ -164,6 +172,43 @@ const StudiesPage: React.FC = () => {
     }
   };
 
+  const handleArchive = async (studyId: number) => {
+    try {
+      await api.post(`/api/studies/${studyId}/archive`);
+      fetchStudies();
+    } catch (err: any) {
+      setError(err.response?.data?.detail || 'Failed to archive study');
+    }
+  };
+
+  const handleUnarchive = async (studyId: number) => {
+    try {
+      await api.post(`/api/studies/${studyId}/unarchive`);
+      fetchStudies();
+    } catch (err: any) {
+      setError(err.response?.data?.detail || 'Failed to unarchive study');
+    }
+  };
+
+  const handleDeleteClick = (study: Study) => {
+    setStudyToDelete(study);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!studyToDelete) return;
+
+    try {
+      await api.delete(`/api/studies/${studyToDelete.id}`);
+      setDeleteDialogOpen(false);
+      setStudyToDelete(null);
+      fetchStudies();
+    } catch (err: any) {
+      setError(err.response?.data?.detail || 'Failed to delete study');
+      setDeleteDialogOpen(false);
+    }
+  };
+
   if (loading) {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
@@ -176,11 +221,21 @@ const StudiesPage: React.FC = () => {
     <Container maxWidth="lg">
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Typography variant="h4">Studies</Typography>
-        {isAdmin && (
-          <Button variant="contained" startIcon={<AddIcon />} onClick={handleCreate}>
-            Create Study
-          </Button>
-        )}
+        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+          {isAdmin && (
+            <>
+              <Button
+                variant={showArchived ? 'outlined' : 'contained'}
+                onClick={() => setShowArchived(!showArchived)}
+              >
+                {showArchived ? 'Hide Archived' : 'Show Archived'}
+              </Button>
+              <Button variant="contained" startIcon={<AddIcon />} onClick={handleCreate}>
+                Create Study
+              </Button>
+            </>
+          )}
+        </Box>
       </Box>
 
       {error && (
@@ -202,8 +257,26 @@ const StudiesPage: React.FC = () => {
           </TableHead>
           <TableBody>
             {studies.map((study) => (
-              <TableRow key={study.id}>
-                <TableCell>{study.name}</TableCell>
+              <TableRow 
+                key={study.id}
+                sx={{
+                  opacity: (study.is_archived ?? false) ? 0.6 : 1,
+                  backgroundColor: (study.is_archived ?? false) ? 'action.hover' : 'inherit',
+                }}
+              >
+                <TableCell>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    {study.name}
+                    {(study.is_archived ?? false) && (
+                      <Chip
+                        label="Archived"
+                        size="small"
+                        color="default"
+                        variant="outlined"
+                      />
+                    )}
+                  </Box>
+                </TableCell>
                 <TableCell>{study.description || '-'}</TableCell>
                 <TableCell>
                   <Chip
@@ -219,10 +292,10 @@ const StudiesPage: React.FC = () => {
                         key={form.id}
                         label={form.name}
                         size="small"
-                        onDelete={isAdmin ? () => handleRemoveForm(study.id, form.id) : undefined}
+                        onDelete={isAdmin && !(study.is_archived ?? false) ? () => handleRemoveForm(study.id, form.id) : undefined}
                       />
                     ))}
-                    {isAdmin && (
+                    {isAdmin && !(study.is_archived ?? false) && (
                       <Button size="small" onClick={() => handleAssignForm(study)}>
                         + Add
                       </Button>
@@ -231,9 +304,51 @@ const StudiesPage: React.FC = () => {
                 </TableCell>
                 {isAdmin && (
                   <TableCell>
-                    <IconButton size="small" onClick={() => handleEdit(study)}>
-                      <EditIcon />
-                    </IconButton>
+                    <Box sx={{ display: 'flex', gap: 0.5 }}>
+                      {!(study.is_archived ?? false) && (
+                        <>
+                          <IconButton size="small" onClick={() => handleEdit(study)}>
+                            <EditIcon />
+                          </IconButton>
+                          <IconButton 
+                            size="small" 
+                            onClick={() => handleArchive(study.id)}
+                            color="default"
+                            title="Archive study"
+                          >
+                            <ArchiveIcon />
+                          </IconButton>
+                          <IconButton 
+                            size="small" 
+                            onClick={() => handleDeleteClick(study)}
+                            color="error"
+                            title="Delete study"
+                          >
+                            <DeleteIcon />
+                          </IconButton>
+                        </>
+                      )}
+                      {(study.is_archived ?? false) && (
+                        <>
+                          <IconButton 
+                            size="small" 
+                            onClick={() => handleUnarchive(study.id)}
+                            color="primary"
+                            title="Unarchive study"
+                          >
+                            <UnarchiveIcon />
+                          </IconButton>
+                          <IconButton 
+                            size="small" 
+                            onClick={() => handleDeleteClick(study)}
+                            color="error"
+                            title="Delete study"
+                          >
+                            <DeleteIcon />
+                          </IconButton>
+                        </>
+                      )}
+                    </Box>
                   </TableCell>
                 )}
               </TableRow>
@@ -295,6 +410,29 @@ const StudiesPage: React.FC = () => {
           <Button onClick={() => setAssignDialogOpen(false)}>Cancel</Button>
           <Button onClick={handleAssignSubmit} variant="contained" disabled={!selectedFormId}>
             Assign
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)}>
+        <DialogTitle>Delete Study</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Are you sure you want to delete the study "{studyToDelete?.name}"? 
+            This action cannot be undone.
+            {studyToDelete && (
+              <Box sx={{ mt: 2 }}>
+                <Alert severity="warning">
+                  Note: Studies with submissions cannot be deleted. They must be archived instead.
+                </Alert>
+              </Box>
+            )}
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
+          <Button onClick={handleDeleteConfirm} variant="contained" color="error">
+            Delete
           </Button>
         </DialogActions>
       </Dialog>

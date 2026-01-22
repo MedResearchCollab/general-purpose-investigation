@@ -63,6 +63,7 @@ class StudyBase(BaseModel):
     name: str
     description: Optional[str] = None
     is_active: bool = True
+    is_archived: bool = False
 
 
 class StudyCreate(StudyBase):
@@ -73,6 +74,7 @@ class StudyUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     is_active: Optional[bool] = None
+    is_archived: Optional[bool] = None
 
 
 class StudyResponse(StudyBase):
