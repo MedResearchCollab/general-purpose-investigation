@@ -8,6 +8,7 @@ import Sidebar from './components/Layout/Sidebar';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import StudiesPage from './pages/StudiesPage';
+import StudyDetailsPage from './pages/StudyDetailsPage';
 import FormsPage from './pages/FormsPage';
 import SubmissionsPage from './pages/SubmissionsPage';
 import UsersPage from './pages/UsersPage';
@@ -68,6 +69,22 @@ const AppContent: React.FC = () => {
                 <Sidebar />
                 <Box component="main" sx={{ flexGrow: 1, p: 3, mt: '64px' }}>
                   <StudiesPage />
+                </Box>
+              </Box>
+            </>
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/studies/:studyId"
+        element={
+          <PrivateRoute>
+            <>
+              <Navbar />
+              <Box sx={{ display: 'flex' }}>
+                <Sidebar />
+                <Box component="main" sx={{ flexGrow: 1, p: 3, mt: '64px' }}>
+                  <StudyDetailsPage />
                 </Box>
               </Box>
             </>

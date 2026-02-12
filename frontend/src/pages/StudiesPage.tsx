@@ -25,6 +25,7 @@ import {
   FormControl,
   InputLabel,
 } from '@mui/material';
+import { useNavigate } from 'react-router-dom';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -54,9 +55,18 @@ interface Study {
 interface Form {
   id: number;
   name: string;
+  profile?: {
+    submissions_count: number;
+    contributors_count: number;
+    last_updated_at: string | null;
+    required_fields_count: number;
+    complete_submissions_count: number;
+    completion_rate_pct: number;
+  };
 }
 
 const StudiesPage: React.FC = () => {
+  const navigate = useNavigate();
   const [studies, setStudies] = useState<Study[]>([]);
   const [forms, setForms] = useState<Form[]>([]);
   const [loading, setLoading] = useState(true);
@@ -329,6 +339,13 @@ const StudiesPage: React.FC = () => {
                 <TableCell>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     {study.title || study.name}
+                    <Button
+                      size="small"
+                      variant="text"
+                      onClick={() => navigate(`/studies/${study.id}`)}
+                    >
+                      View details
+                    </Button>
                   </Box>
                 </TableCell>
                 <TableCell>{study.summary || study.description || '-'}</TableCell>

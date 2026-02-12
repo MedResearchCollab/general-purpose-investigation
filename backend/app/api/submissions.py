@@ -29,7 +29,10 @@ def _extract_unique_key_entries(form: Form, data_json: dict) -> List[dict]:
             detail="This form is invalid: no unique key field is configured. Please contact an administrator."
         )
 
-    entries = []
+    normalized_parts = []
+    labels = []
+    field_names = []
+
     for field in unique_fields:
         field_name = field.get("name")
         label = field.get("label") or field_name
@@ -41,13 +44,26 @@ def _extract_unique_key_entries(form: Form, data_json: dict) -> List[dict]:
                 detail=f"Unique key field '{label}' is required and cannot be empty."
             )
 
-        entries.append({
-            "key_name": field_name,
-            "key_value": _normalize_unique_value(raw_value),
-            "label": label,
-        })
+        normalized_parts.append(_normalize_unique_value(raw_value))
+        labels.append(label)
+        field_names.append(field_name)
 
-    return entries
+    # Single unique key field: keep one-field behavior.
+    if len(unique_fields) == 1:
+        return [{
+            "key_name": field_names[0],
+            "key_value": normalized_parts[0],
+            "label": labels[0],
+            "display_value": normalized_parts[0],
+        }]
+
+    # Multiple unique key fields: enforce uniqueness on composed key combination.
+    return [{
+        "key_name": f"__composite__:{'|'.join(field_names)}",
+        "key_value": json.dumps(normalized_parts, ensure_ascii=False, separators=(",", ":")),
+        "label": " + ".join(labels),
+        "display_value": " + ".join(normalized_parts),
+    }]
 
 
 def _ensure_unique_values_available(
@@ -69,7 +85,7 @@ def _ensure_unique_values_available(
         if existing:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Duplicate value for unique key '{entry['label']}': '{entry['key_value']}'."
+                detail=f"Duplicate value for unique key '{entry['label']}': '{entry.get('display_value', entry['key_value'])}'."
             )
 
 

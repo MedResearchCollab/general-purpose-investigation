@@ -89,11 +89,12 @@ def migrate_database():
                 except Exception:
                     payload = {}
 
-                for key_name in unique_field_names:
+                # Single unique field => one-field key.
+                if len(unique_field_names) == 1:
+                    key_name = unique_field_names[0]
                     value = payload.get(key_name)
                     if value is None:
                         continue
-
                     normalized = _normalize_unique_value(value)
                     if normalized == "":
                         continue
@@ -112,6 +113,41 @@ def migrate_database():
                     else:
                         seen[unique_tuple] = submission_id
                         rows_to_insert.append((submission_id, form_id, key_name, normalized))
+                    continue
+
+                # Multiple unique fields => composed key on the full combination.
+                values = []
+                missing_component = False
+                for key_name in unique_field_names:
+                    value = payload.get(key_name)
+                    if value is None:
+                        missing_component = True
+                        break
+                    normalized = _normalize_unique_value(value)
+                    if normalized == "":
+                        missing_component = True
+                        break
+                    values.append(normalized)
+
+                if missing_component:
+                    continue
+
+                composed_key_name = "__composite__:" + "|".join(unique_field_names)
+                composed_key_value = json.dumps(values, ensure_ascii=False, separators=(",", ":"))
+                unique_tuple = (form_id, composed_key_name, composed_key_value)
+                if unique_tuple in seen and seen[unique_tuple] != submission_id:
+                    duplicates.append(
+                        {
+                            "form_id": form_id,
+                            "key_name": composed_key_name,
+                            "key_value": composed_key_value,
+                            "submission_a": seen[unique_tuple],
+                            "submission_b": submission_id,
+                        }
+                    )
+                else:
+                    seen[unique_tuple] = submission_id
+                    rows_to_insert.append((submission_id, form_id, composed_key_name, composed_key_value))
 
         if duplicates:
             print("Migration aborted: duplicate unique key values found in existing submissions.")

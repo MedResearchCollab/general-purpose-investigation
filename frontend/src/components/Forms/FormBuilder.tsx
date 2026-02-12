@@ -176,6 +176,9 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ onSubmit, initialData }) => {
           {validationError}
         </Alert>
       )}
+      <Alert severity="info" sx={{ mb: 2 }}>
+        If multiple fields are marked as Unique Key, they are enforced as a composed key combination.
+      </Alert>
 
       <List>
         {fields.map((field, index) => (
