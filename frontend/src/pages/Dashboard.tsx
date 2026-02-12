@@ -9,6 +9,7 @@ import {
 } from '@mui/material';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 interface DashboardStats {
   studies_count: number;
@@ -21,6 +22,7 @@ const Dashboard: React.FC = () => {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const { user, isAdmin } = useAuth();
+  const navigate = useNavigate();
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -77,7 +79,10 @@ const Dashboard: React.FC = () => {
 
       <Grid container spacing={3}>
         <Grid item xs={12} sm={6} md={3}>
-          <Paper sx={{ p: 3, textAlign: 'center' }}>
+          <Paper
+            sx={{ p: 3, textAlign: 'center', cursor: 'pointer', '&:hover': { boxShadow: 6 } }}
+            onClick={() => navigate('/studies')}
+          >
             <Typography variant="h3" color="primary">
               {stats?.studies_count || 0}
             </Typography>
@@ -87,7 +92,10 @@ const Dashboard: React.FC = () => {
           </Paper>
         </Grid>
         <Grid item xs={12} sm={6} md={3}>
-          <Paper sx={{ p: 3, textAlign: 'center' }}>
+          <Paper
+            sx={{ p: 3, textAlign: 'center', cursor: 'pointer', '&:hover': { boxShadow: 6 } }}
+            onClick={() => navigate('/forms')}
+          >
             <Typography variant="h3" color="primary">
               {stats?.forms_count || 0}
             </Typography>
@@ -97,7 +105,10 @@ const Dashboard: React.FC = () => {
           </Paper>
         </Grid>
         <Grid item xs={12} sm={6} md={3}>
-          <Paper sx={{ p: 3, textAlign: 'center' }}>
+          <Paper
+            sx={{ p: 3, textAlign: 'center', cursor: 'pointer', '&:hover': { boxShadow: 6 } }}
+            onClick={() => navigate('/submissions')}
+          >
             <Typography variant="h3" color="primary">
               {stats?.submissions_count || 0}
             </Typography>
@@ -108,7 +119,10 @@ const Dashboard: React.FC = () => {
         </Grid>
         {isAdmin && (
           <Grid item xs={12} sm={6} md={3}>
-            <Paper sx={{ p: 3, textAlign: 'center' }}>
+            <Paper
+              sx={{ p: 3, textAlign: 'center', cursor: 'pointer', '&:hover': { boxShadow: 6 } }}
+              onClick={() => navigate('/users')}
+            >
               <Typography variant="h3" color="primary">
                 {stats?.users_count || 0}
               </Typography>

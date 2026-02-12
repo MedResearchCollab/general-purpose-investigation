@@ -22,6 +22,7 @@ import { useAuth } from '../context/AuthContext';
 interface Study {
   id: number;
   name: string;
+  forms?: Form[];
 }
 
 interface Form {
@@ -36,7 +37,6 @@ interface Hospital {
 
 const ExportPage: React.FC = () => {
   const [studies, setStudies] = useState<Study[]>([]);
-  const [forms, setForms] = useState<Form[]>([]);
   const [hospitals, setHospitals] = useState<Hospital[]>([]);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
@@ -50,6 +50,55 @@ const ExportPage: React.FC = () => {
   const [error, setError] = useState('');
   const { isAdmin } = useAuth();
 
+  const getAvailableForms = (): Form[] => {
+    if (!filters.study_id) return [];
+    const selectedStudy = studies.find((study) => study.id === filters.study_id);
+    return selectedStudy?.forms || [];
+  };
+
+  const buildFilterSummary = () => {
+    const parts: string[] = [];
+    if (filters.study_id) parts.push(`study_id=${filters.study_id}`);
+    if (filters.form_id) parts.push(`form_id=${filters.form_id}`);
+    if (filters.hospital_id) parts.push(`hospital_id=${filters.hospital_id}`);
+    if (filters.start_date) parts.push(`start_date=${filters.start_date.toISOString()}`);
+    if (filters.end_date) parts.push(`end_date=${filters.end_date.toISOString()}`);
+    return parts.length > 0 ? parts.join(', ') : 'no filters';
+  };
+
+  const parseExportError = async (err: any): Promise<string> => {
+    const statusCode = err?.response?.status;
+    const defaultMessage = `Failed to export data${statusCode ? ` (HTTP ${statusCode})` : ''}.`;
+    const responseData = err?.response?.data;
+
+    try {
+      if (responseData instanceof Blob) {
+        const text = await responseData.text();
+        if (text) {
+          try {
+            const parsed = JSON.parse(text);
+            if (parsed?.detail) return `${parsed.detail}`;
+            if (parsed?.message) return `${parsed.message}`;
+            return text;
+          } catch {
+            return text;
+          }
+        }
+      } else if (responseData?.detail) {
+        return responseData.detail;
+      } else if (responseData?.message) {
+        return responseData.message;
+      }
+    } catch {
+      // Ignore parsing failures and fallback below.
+    }
+
+    if (err?.message) {
+      return `${defaultMessage} ${err.message}`;
+    }
+    return defaultMessage;
+  };
+
   useEffect(() => {
     if (isAdmin) {
       fetchData();
@@ -58,13 +107,24 @@ const ExportPage: React.FC = () => {
 
   const fetchData = async () => {
     try {
-      const [studiesRes, formsRes, hospitalsRes] = await Promise.all([
+      const [studiesRes, hospitalsRes] = await Promise.all([
         api.get('/api/studies'),
-        api.get('/api/forms'),
         api.get('/api/hospitals'),
       ]);
-      setStudies(studiesRes.data);
-      setForms(formsRes.data);
+
+      // Load study details so each study includes only its assigned forms.
+      const detailedStudies = await Promise.all(
+        (studiesRes.data || []).map(async (study: Study) => {
+          try {
+            const detailRes = await api.get(`/api/studies/${study.id}`);
+            return detailRes.data;
+          } catch {
+            return { ...study, forms: [] };
+          }
+        })
+      );
+
+      setStudies(detailedStudies);
       setHospitals(hospitalsRes.data);
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Failed to fetch data');
@@ -102,7 +162,8 @@ const ExportPage: React.FC = () => {
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to export data');
+      const detailedMessage = await parseExportError(err);
+      setError(`${detailedMessage} Applied filters: ${buildFilterSummary()}.`);
     } finally {
       setExporting(false);
     }
@@ -146,7 +207,18 @@ const ExportPage: React.FC = () => {
             <InputLabel>Study</InputLabel>
             <Select
               value={filters.study_id}
-              onChange={(e) => setFilters({ ...filters, study_id: e.target.value as number })}
+              onChange={(e) => {
+                const studyId = e.target.value as number;
+                const selectedStudy = studies.find((study) => study.id === studyId);
+                const studyForms = selectedStudy?.forms || [];
+                const currentFormStillValid = studyForms.some((form) => form.id === filters.form_id);
+
+                setFilters({
+                  ...filters,
+                  study_id: studyId,
+                  form_id: currentFormStillValid ? filters.form_id : '',
+                });
+              }}
               label="Study"
             >
               <MenuItem value="">All Studies</MenuItem>
@@ -164,9 +236,12 @@ const ExportPage: React.FC = () => {
               value={filters.form_id}
               onChange={(e) => setFilters({ ...filters, form_id: e.target.value as number })}
               label="Form"
+              disabled={!filters.study_id}
             >
-              <MenuItem value="">All Forms</MenuItem>
-              {forms.map((form) => (
+              <MenuItem value="">
+                {filters.study_id ? 'All Forms in Selected Study' : 'Select a Study First'}
+              </MenuItem>
+              {getAvailableForms().map((form) => (
                 <MenuItem key={form.id} value={form.id}>
                   {form.name}
                 </MenuItem>

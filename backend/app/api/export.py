@@ -14,6 +14,33 @@ from app.middleware.auth_middleware import get_current_admin_user
 router = APIRouter(prefix="/api/export", tags=["export"])
 
 
+def _format_filters_for_message(export_request: ExportRequest) -> str:
+    parts = []
+    if export_request.study_id is not None:
+        parts.append(f"study_id={export_request.study_id}")
+    if export_request.form_id is not None:
+        parts.append(f"form_id={export_request.form_id}")
+    if export_request.hospital_id is not None:
+        parts.append(f"hospital_id={export_request.hospital_id}")
+    if export_request.start_date is not None:
+        parts.append(f"start_date={export_request.start_date.isoformat()}")
+    if export_request.end_date is not None:
+        parts.append(f"end_date={export_request.end_date.isoformat()}")
+    return ", ".join(parts) if parts else "no filters"
+
+
+def _validate_export_dates(export_request: ExportRequest):
+    if (
+        export_request.start_date is not None
+        and export_request.end_date is not None
+        and export_request.start_date > export_request.end_date
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid date range: start_date must be before or equal to end_date."
+        )
+
+
 @router.post("/csv")
 def export_csv(
     export_request: ExportRequest,
@@ -21,6 +48,7 @@ def export_csv(
     current_user: User = Depends(get_current_admin_user)
 ):
     """Export data as CSV (admin only)"""
+    _validate_export_dates(export_request)
     query = db.query(Submission)
     
     if export_request.study_id:
@@ -37,9 +65,10 @@ def export_csv(
     submissions = query.all()
     
     if not submissions:
+        applied_filters = _format_filters_for_message(export_request)
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="No data found for export"
+            detail=f"No submissions found for export using filters: {applied_filters}."
         )
     
     # Create CSV in memory
@@ -102,6 +131,7 @@ def export_json(
     current_user: User = Depends(get_current_admin_user)
 ):
     """Export data as JSON (admin only)"""
+    _validate_export_dates(export_request)
     query = db.query(Submission)
     
     if export_request.study_id:
@@ -118,9 +148,10 @@ def export_json(
     submissions = query.all()
     
     if not submissions:
+        applied_filters = _format_filters_for_message(export_request)
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="No data found for export"
+            detail=f"No submissions found for export using filters: {applied_filters}."
         )
     
     # Build export data

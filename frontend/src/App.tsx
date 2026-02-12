@@ -50,7 +50,7 @@ const AppContent: React.FC = () => {
               <Navbar />
               <Box sx={{ display: 'flex' }}>
                 <Sidebar />
-                <Box component="main" sx={{ flexGrow: 1, p: 3 }}>
+                <Box component="main" sx={{ flexGrow: 1, p: 3, mt: '64px' }}>
                   <Dashboard />
                 </Box>
               </Box>
@@ -66,7 +66,7 @@ const AppContent: React.FC = () => {
               <Navbar />
               <Box sx={{ display: 'flex' }}>
                 <Sidebar />
-                <Box component="main" sx={{ flexGrow: 1, p: 3 }}>
+                <Box component="main" sx={{ flexGrow: 1, p: 3, mt: '64px' }}>
                   <StudiesPage />
                 </Box>
               </Box>
@@ -82,7 +82,7 @@ const AppContent: React.FC = () => {
               <Navbar />
               <Box sx={{ display: 'flex' }}>
                 <Sidebar />
-                <Box component="main" sx={{ flexGrow: 1, p: 3 }}>
+                <Box component="main" sx={{ flexGrow: 1, p: 3, mt: '64px' }}>
                   <FormsPage />
                 </Box>
               </Box>
@@ -98,7 +98,7 @@ const AppContent: React.FC = () => {
               <Navbar />
               <Box sx={{ display: 'flex' }}>
                 <Sidebar />
-                <Box component="main" sx={{ flexGrow: 1, p: 3 }}>
+                <Box component="main" sx={{ flexGrow: 1, p: 3, mt: '64px' }}>
                   <SubmissionsPage />
                 </Box>
               </Box>
@@ -114,7 +114,7 @@ const AppContent: React.FC = () => {
               <Navbar />
               <Box sx={{ display: 'flex' }}>
                 <Sidebar />
-                <Box component="main" sx={{ flexGrow: 1, p: 3 }}>
+                <Box component="main" sx={{ flexGrow: 1, p: 3, mt: '64px' }}>
                   <UsersPage />
                 </Box>
               </Box>
@@ -130,7 +130,7 @@ const AppContent: React.FC = () => {
               <Navbar />
               <Box sx={{ display: 'flex' }}>
                 <Sidebar />
-                <Box component="main" sx={{ flexGrow: 1, p: 3 }}>
+                <Box component="main" sx={{ flexGrow: 1, p: 3, mt: '64px' }}>
                   <HospitalsPage />
                 </Box>
               </Box>
@@ -146,7 +146,7 @@ const AppContent: React.FC = () => {
               <Navbar />
               <Box sx={{ display: 'flex' }}>
                 <Sidebar />
-                <Box component="main" sx={{ flexGrow: 1, p: 3 }}>
+                <Box component="main" sx={{ flexGrow: 1, p: 3, mt: '64px' }}>
                   <ExportPage />
                 </Box>
               </Box>
