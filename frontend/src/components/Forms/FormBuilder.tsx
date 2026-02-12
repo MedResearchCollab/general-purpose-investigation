@@ -20,7 +20,7 @@ import {
   DialogActions,
   Checkbox,
   FormControlLabel,
-  TextField as MuiTextField,
+  Alert,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -31,6 +31,7 @@ interface FormFieldDef {
   label: string;
   type: string;
   required: boolean;
+  unique_key?: boolean;
   options?: string[];
   placeholder?: string;
   validation?: {
@@ -64,6 +65,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ onSubmit, initialData }) => {
     required: false,
   });
   const [optionsInput, setOptionsInput] = useState<string>('');
+  const [validationError, setValidationError] = useState('');
 
   const handleAddField = () => {
     setCurrentField({
@@ -119,6 +121,14 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ onSubmit, initialData }) => {
       return;
     }
 
+    const hasUniqueKey = fields.some((field) => field.unique_key === true);
+    if (!hasUniqueKey) {
+      setValidationError('At least one field must be marked as Unique Key.');
+      return;
+    }
+
+    setValidationError('');
+
     onSubmit({
       name: formName,
       description: formDescription,
@@ -161,12 +171,18 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ onSubmit, initialData }) => {
         </Button>
       </Box>
 
+      {validationError && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {validationError}
+        </Alert>
+      )}
+
       <List>
         {fields.map((field, index) => (
           <ListItem key={index}>
             <ListItemText
               primary={field.label}
-              secondary={`${field.type} ${field.required ? '(required)' : ''}`}
+              secondary={`${field.type} ${field.required ? '(required)' : ''}${field.unique_key ? ' (unique key)' : ''}`}
             />
             <ListItemSecondaryAction>
               <IconButton edge="end" onClick={() => handleEditField(index)}>
@@ -237,6 +253,15 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ onSubmit, initialData }) => {
                 />
               }
               label="Required"
+            />
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={currentField.unique_key || false}
+                  onChange={(e) => setCurrentField({ ...currentField, unique_key: e.target.checked })}
+                />
+              }
+              label="Unique Key (prevent duplicate records)"
             />
             {(currentField.type === 'select' || currentField.type === 'radio') && (
               <TextField

@@ -1,10 +1,7 @@
 import React from 'react';
 import {
   TextField,
-  Select,
-  MenuItem,
   FormControl,
-  InputLabel,
   FormControlLabel,
   Checkbox,
   Radio,
@@ -107,22 +104,26 @@ const FormField: React.FC<FormFieldProps> = ({ field, value, onChange, error, di
 
     case 'select':
       return (
-        <FormControl fullWidth required={field.required} error={!!error} disabled={disabled}>
-          <InputLabel>{field.label}</InputLabel>
-          <Select
-            value={value || ''}
-            onChange={(e) => handleChange(e.target.value)}
-            label={field.label}
-            disabled={disabled}
-          >
-            {field.options?.map((option) => (
-              <MenuItem key={option} value={option}>
-                {option}
-              </MenuItem>
-            ))}
-          </Select>
-          {error && <FormHelperText>{error}</FormHelperText>}
-        </FormControl>
+        <TextField
+          fullWidth
+          select
+          label={field.label}
+          name={field.name}
+          value={value || ''}
+          onChange={(e) => handleChange(e.target.value)}
+          required={field.required}
+          error={!!error}
+          helperText={error}
+          disabled={disabled}
+          SelectProps={{ native: true }}
+        >
+          <option value="" />
+          {field.options?.map((option) => (
+            <option key={option} value={option}>
+              {option}
+            </option>
+          ))}
+        </TextField>
       );
 
     case 'radio':

@@ -9,6 +9,23 @@ from app.middleware.auth_middleware import get_current_admin_user, get_current_u
 router = APIRouter(prefix="/api/forms", tags=["forms"])
 
 
+def validate_form_unique_key_requirements(schema_json: dict):
+    """Ensure form schema includes at least one field marked as unique_key."""
+    fields = schema_json.get("fields", []) if isinstance(schema_json, dict) else []
+    if not isinstance(fields, list) or len(fields) == 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Form must include at least one field."
+        )
+
+    unique_key_fields = [field for field in fields if isinstance(field, dict) and field.get("unique_key") is True]
+    if len(unique_key_fields) == 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Form must include at least one field marked as unique key."
+        )
+
+
 @router.get("", response_model=List[FormResponse])
 def list_forms(
     db: Session = Depends(get_db),
@@ -33,6 +50,8 @@ def create_form(
     current_user: User = Depends(get_current_admin_user)
 ):
     """Create a new form (admin only)"""
+    validate_form_unique_key_requirements(form_data.schema_json)
+
     new_form = Form(
         name=form_data.name,
         description=form_data.description,
@@ -93,6 +112,7 @@ def update_form(
     if form_data.description is not None:
         form.description = form_data.description
     if form_data.schema_json is not None:
+        validate_form_unique_key_requirements(form_data.schema_json)
         form.schema_json = form_data.schema_json
     
     db.commit()

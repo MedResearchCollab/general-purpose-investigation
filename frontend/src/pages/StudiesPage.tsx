@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   Container,
   Typography,
@@ -28,8 +28,6 @@ import {
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
-import ArchiveIcon from '@mui/icons-material/Archive';
-import UnarchiveIcon from '@mui/icons-material/Unarchive';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 
@@ -37,8 +35,18 @@ interface Study {
   id: number;
   name: string;
   description: string;
-  is_active: boolean;
-  is_archived?: boolean;
+  title?: string;
+  summary?: string;
+  primary_coordinating_center?: string;
+  principal_investigator_name?: string;
+  principal_investigator_email?: string;
+  sub_investigator_name?: string;
+  sub_investigator_email?: string;
+  general_objective?: string;
+  specific_objectives?: string;
+  inclusion_exclusion_criteria?: string;
+  data_collection_deadline?: string;
+  status: 'Data Collection' | 'Analysis' | 'Closed' | 'Canceled';
   created_at: string;
   forms?: Form[];
 }
@@ -59,19 +67,27 @@ const StudiesPage: React.FC = () => {
   const [selectedStudy, setSelectedStudy] = useState<Study | null>(null);
   const [studyToDelete, setStudyToDelete] = useState<Study | null>(null);
   const [selectedFormId, setSelectedFormId] = useState<number | ''>('');
-  const [formData, setFormData] = useState({ name: '', description: '', is_active: true });
+  const [formData, setFormData] = useState({
+    title: '',
+    summary: '',
+    primary_coordinating_center: '',
+    principal_investigator_name: '',
+    principal_investigator_email: '',
+    sub_investigator_name: '',
+    sub_investigator_email: '',
+    general_objective: '',
+    specific_objectives: '',
+    inclusion_exclusion_criteria: '',
+    data_collection_deadline: '',
+    status: 'Data Collection' as Study['status'],
+  });
   const [error, setError] = useState('');
-  const [showArchived, setShowArchived] = useState(false);
+  const [showClosedCanceled, setShowClosedCanceled] = useState(false);
   const { isAdmin } = useAuth();
 
-  useEffect(() => {
-    fetchStudies();
-    fetchForms();
-  }, [showArchived]);
-
-  const fetchStudies = async () => {
+  const fetchStudies = useCallback(async () => {
     try {
-      const params = showArchived ? { include_archived: true } : {};
+      const params = showClosedCanceled ? { include_closed_canceled: true } : {};
       const response = await api.get('/api/studies', { params });
       // Fetch full details for each study (with forms) but handle errors gracefully
       const studiesData = await Promise.allSettled(
@@ -85,8 +101,7 @@ const StudiesPage: React.FC = () => {
             return {
               ...study,
               forms: [],
-              is_active: study.is_active ?? true,
-              is_archived: study.is_archived ?? false,
+              status: study.status || 'Data Collection',
             };
           }
         })
@@ -104,29 +119,56 @@ const StudiesPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [showClosedCanceled]);
 
-  const fetchForms = async () => {
+  const fetchForms = useCallback(async () => {
     try {
       const response = await api.get('/api/forms');
       setForms(response.data);
     } catch (err: any) {
       console.error('Failed to fetch forms:', err);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchStudies();
+    fetchForms();
+  }, [fetchStudies, fetchForms]);
 
   const handleCreate = () => {
     setEditingStudy(null);
-    setFormData({ name: '', description: '', is_active: true });
+    setFormData({
+      title: '',
+      summary: '',
+      primary_coordinating_center: '',
+      principal_investigator_name: '',
+      principal_investigator_email: '',
+      sub_investigator_name: '',
+      sub_investigator_email: '',
+      general_objective: '',
+      specific_objectives: '',
+      inclusion_exclusion_criteria: '',
+      data_collection_deadline: '',
+      status: 'Data Collection',
+    });
     setDialogOpen(true);
   };
 
   const handleEdit = (study: Study) => {
     setEditingStudy(study);
     setFormData({
-      name: study.name,
-      description: study.description || '',
-      is_active: study.is_active,
+      title: study.title || study.name || '',
+      summary: study.summary || study.description || '',
+      primary_coordinating_center: study.primary_coordinating_center || '',
+      principal_investigator_name: study.principal_investigator_name || '',
+      principal_investigator_email: study.principal_investigator_email || '',
+      sub_investigator_name: study.sub_investigator_name || '',
+      sub_investigator_email: study.sub_investigator_email || '',
+      general_objective: study.general_objective || '',
+      specific_objectives: study.specific_objectives || '',
+      inclusion_exclusion_criteria: study.inclusion_exclusion_criteria || '',
+      data_collection_deadline: study.data_collection_deadline || '',
+      status: study.status || 'Data Collection',
     });
     setDialogOpen(true);
   };
@@ -138,11 +180,34 @@ const StudiesPage: React.FC = () => {
   };
 
   const handleSubmit = async () => {
+    const title = formData.title.trim();
+    const payload = {
+      ...formData,
+      name: title,
+      description: formData.summary.trim() || null,
+      title,
+      summary: formData.summary.trim() || null,
+      primary_coordinating_center: formData.primary_coordinating_center.trim() || null,
+      principal_investigator_name: formData.principal_investigator_name.trim() || null,
+      principal_investigator_email: formData.principal_investigator_email.trim() || null,
+      sub_investigator_name: formData.sub_investigator_name.trim() || null,
+      sub_investigator_email: formData.sub_investigator_email.trim() || null,
+      general_objective: formData.general_objective.trim() || null,
+      specific_objectives: formData.specific_objectives.trim() || null,
+      inclusion_exclusion_criteria: formData.inclusion_exclusion_criteria.trim() || null,
+      data_collection_deadline: formData.data_collection_deadline || null,
+    };
+
+    if (!title) {
+      setError('Title is required');
+      return;
+    }
+
     try {
       if (editingStudy) {
-        await api.put(`/api/studies/${editingStudy.id}`, formData);
+        await api.put(`/api/studies/${editingStudy.id}`, payload);
       } else {
-        await api.post('/api/studies', formData);
+        await api.post('/api/studies', payload);
       }
       setDialogOpen(false);
       fetchStudies();
@@ -172,21 +237,12 @@ const StudiesPage: React.FC = () => {
     }
   };
 
-  const handleArchive = async (studyId: number) => {
+  const updateStudyStatus = async (studyId: number, nextStatus: Study['status']) => {
     try {
-      await api.post(`/api/studies/${studyId}/archive`);
+      await api.put(`/api/studies/${studyId}`, { status: nextStatus });
       fetchStudies();
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to archive study');
-    }
-  };
-
-  const handleUnarchive = async (studyId: number) => {
-    try {
-      await api.post(`/api/studies/${studyId}/unarchive`);
-      fetchStudies();
-    } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to unarchive study');
+      setError(err.response?.data?.detail || 'Failed to update study status');
     }
   };
 
@@ -225,10 +281,10 @@ const StudiesPage: React.FC = () => {
           {isAdmin && (
             <>
               <Button
-                variant={showArchived ? 'outlined' : 'contained'}
-                onClick={() => setShowArchived(!showArchived)}
+                variant={showClosedCanceled ? 'outlined' : 'contained'}
+                onClick={() => setShowClosedCanceled(!showClosedCanceled)}
               >
-                {showArchived ? 'Hide Archived' : 'Show Archived'}
+                {showClosedCanceled ? 'Hide Closed/Canceled' : 'Show Closed/Canceled'}
               </Button>
               <Button variant="contained" startIcon={<AddIcon />} onClick={handleCreate}>
                 Create Study
@@ -250,6 +306,12 @@ const StudiesPage: React.FC = () => {
             <TableRow>
               <TableCell>Name</TableCell>
               <TableCell>Description</TableCell>
+              <TableCell>Primary Center</TableCell>
+              <TableCell>Principal Investigator</TableCell>
+              <TableCell>Sub-Investigator</TableCell>
+              <TableCell>Objectives</TableCell>
+              <TableCell>Inclusion/Exclusion Criteria</TableCell>
+              <TableCell>Data Collection Deadline</TableCell>
               <TableCell>Status</TableCell>
               <TableCell>Forms</TableCell>
               {isAdmin && <TableCell>Actions</TableCell>}
@@ -260,28 +322,46 @@ const StudiesPage: React.FC = () => {
               <TableRow 
                 key={study.id}
                 sx={{
-                  opacity: (study.is_archived ?? false) ? 0.6 : 1,
-                  backgroundColor: (study.is_archived ?? false) ? 'action.hover' : 'inherit',
+                  opacity: (study.status === 'Closed' || study.status === 'Canceled') ? 0.7 : 1,
+                  backgroundColor: (study.status === 'Closed' || study.status === 'Canceled') ? 'action.hover' : 'inherit',
                 }}
               >
                 <TableCell>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    {study.name}
-                    {(study.is_archived ?? false) && (
-                      <Chip
-                        label="Archived"
-                        size="small"
-                        color="default"
-                        variant="outlined"
-                      />
-                    )}
+                    {study.title || study.name}
                   </Box>
                 </TableCell>
-                <TableCell>{study.description || '-'}</TableCell>
+                <TableCell>{study.summary || study.description || '-'}</TableCell>
+                <TableCell>{study.primary_coordinating_center || '-'}</TableCell>
+                <TableCell>
+                  {study.principal_investigator_name || study.principal_investigator_email
+                    ? `${study.principal_investigator_name || '-'}${study.principal_investigator_email ? ` (${study.principal_investigator_email})` : ''}`
+                    : '-'}
+                </TableCell>
+                <TableCell>
+                  {study.sub_investigator_name || study.sub_investigator_email
+                    ? `${study.sub_investigator_name || '-'}${study.sub_investigator_email ? ` (${study.sub_investigator_email})` : ''}`
+                    : '-'}
+                </TableCell>
+                <TableCell>
+                  {(study.general_objective || study.specific_objectives)
+                    ? `${study.general_objective || '-'}${study.specific_objectives ? ` | ${study.specific_objectives}` : ''}`
+                    : '-'}
+                </TableCell>
+                <TableCell>{study.inclusion_exclusion_criteria || '-'}</TableCell>
+                <TableCell>{study.data_collection_deadline || '-'}</TableCell>
                 <TableCell>
                   <Chip
-                    label={study.is_active ? 'Active' : 'Inactive'}
-                    color={study.is_active ? 'success' : 'default'}
+                    label={study.status}
+                    color={
+                      study.status === 'Data Collection'
+                        ? 'success'
+                        : study.status === 'Analysis'
+                          ? 'info'
+                          : study.status === 'Closed'
+                            ? 'default'
+                            : 'warning'
+                    }
                     size="small"
                   />
                 </TableCell>
@@ -292,10 +372,10 @@ const StudiesPage: React.FC = () => {
                         key={form.id}
                         label={form.name}
                         size="small"
-                        onDelete={isAdmin && !(study.is_archived ?? false) ? () => handleRemoveForm(study.id, form.id) : undefined}
+                        onDelete={isAdmin && study.status !== 'Closed' && study.status !== 'Canceled' ? () => handleRemoveForm(study.id, form.id) : undefined}
                       />
                     ))}
-                    {isAdmin && !(study.is_archived ?? false) && (
+                    {isAdmin && study.status !== 'Closed' && study.status !== 'Canceled' && (
                       <Button size="small" onClick={() => handleAssignForm(study)}>
                         + Add
                       </Button>
@@ -305,49 +385,37 @@ const StudiesPage: React.FC = () => {
                 {isAdmin && (
                   <TableCell>
                     <Box sx={{ display: 'flex', gap: 0.5 }}>
-                      {!(study.is_archived ?? false) && (
-                        <>
-                          <IconButton size="small" onClick={() => handleEdit(study)}>
-                            <EditIcon />
-                          </IconButton>
-                          <IconButton 
-                            size="small" 
-                            onClick={() => handleArchive(study.id)}
-                            color="default"
-                            title="Archive study"
-                          >
-                            <ArchiveIcon />
-                          </IconButton>
-                          <IconButton 
-                            size="small" 
-                            onClick={() => handleDeleteClick(study)}
-                            color="error"
-                            title="Delete study"
-                          >
-                            <DeleteIcon />
-                          </IconButton>
-                        </>
+                      <IconButton size="small" onClick={() => handleEdit(study)}>
+                        <EditIcon />
+                      </IconButton>
+                      {study.status !== 'Closed' && (
+                        <Button size="small" onClick={() => updateStudyStatus(study.id, 'Closed')}>
+                          Close
+                        </Button>
                       )}
-                      {(study.is_archived ?? false) && (
-                        <>
-                          <IconButton 
-                            size="small" 
-                            onClick={() => handleUnarchive(study.id)}
-                            color="primary"
-                            title="Unarchive study"
-                          >
-                            <UnarchiveIcon />
-                          </IconButton>
-                          <IconButton 
-                            size="small" 
-                            onClick={() => handleDeleteClick(study)}
-                            color="error"
-                            title="Delete study"
-                          >
-                            <DeleteIcon />
-                          </IconButton>
-                        </>
+                      {study.status !== 'Canceled' && (
+                        <Button size="small" color="warning" onClick={() => updateStudyStatus(study.id, 'Canceled')}>
+                          Cancel
+                        </Button>
                       )}
+                      {study.status !== 'Data Collection' && (
+                        <Button size="small" onClick={() => updateStudyStatus(study.id, 'Data Collection')}>
+                          Set Data Collection
+                        </Button>
+                      )}
+                      {study.status !== 'Analysis' && (
+                        <Button size="small" onClick={() => updateStudyStatus(study.id, 'Analysis')}>
+                          Set Analysis
+                        </Button>
+                      )}
+                      <IconButton 
+                        size="small" 
+                        onClick={() => handleDeleteClick(study)}
+                        color="error"
+                        title="Delete study"
+                      >
+                        <DeleteIcon />
+                      </IconButton>
                     </Box>
                   </TableCell>
                 )}
@@ -362,20 +430,97 @@ const StudiesPage: React.FC = () => {
         <DialogContent>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
             <TextField
-              label="Name"
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              label="Title"
+              value={formData.title}
+              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
               required
               fullWidth
             />
             <TextField
-              label="Description"
-              value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              label="Summary"
+              value={formData.summary}
+              onChange={(e) => setFormData({ ...formData, summary: e.target.value })}
               multiline
               rows={3}
               fullWidth
             />
+            <TextField
+              label="Primary Coordinating Center"
+              value={formData.primary_coordinating_center}
+              onChange={(e) => setFormData({ ...formData, primary_coordinating_center: e.target.value })}
+              fullWidth
+            />
+            <TextField
+              label="Principal Investigator"
+              value={formData.principal_investigator_name}
+              onChange={(e) => setFormData({ ...formData, principal_investigator_name: e.target.value })}
+              fullWidth
+            />
+            <TextField
+              label="Principal Investigator Email"
+              type="email"
+              value={formData.principal_investigator_email}
+              onChange={(e) => setFormData({ ...formData, principal_investigator_email: e.target.value })}
+              fullWidth
+            />
+            <TextField
+              label="Sub-Investigator"
+              value={formData.sub_investigator_name}
+              onChange={(e) => setFormData({ ...formData, sub_investigator_name: e.target.value })}
+              fullWidth
+            />
+            <TextField
+              label="Sub-Investigator Email"
+              type="email"
+              value={formData.sub_investigator_email}
+              onChange={(e) => setFormData({ ...formData, sub_investigator_email: e.target.value })}
+              fullWidth
+            />
+            <TextField
+              label="General Objective"
+              value={formData.general_objective}
+              onChange={(e) => setFormData({ ...formData, general_objective: e.target.value })}
+              multiline
+              rows={2}
+              fullWidth
+            />
+            <TextField
+              label="Specific Objectives"
+              value={formData.specific_objectives}
+              onChange={(e) => setFormData({ ...formData, specific_objectives: e.target.value })}
+              multiline
+              rows={2}
+              fullWidth
+            />
+            <TextField
+              label="Inclusion and Exclusion Criteria"
+              value={formData.inclusion_exclusion_criteria}
+              onChange={(e) => setFormData({ ...formData, inclusion_exclusion_criteria: e.target.value })}
+              multiline
+              rows={2}
+              fullWidth
+            />
+            <TextField
+              label="Data Collection Deadline"
+              type="date"
+              value={formData.data_collection_deadline}
+              onChange={(e) => setFormData({ ...formData, data_collection_deadline: e.target.value })}
+              InputLabelProps={{ shrink: true }}
+              fullWidth
+            />
+            <FormControl fullWidth>
+              <InputLabel>Status</InputLabel>
+              <Select
+                value={formData.status}
+                onChange={(e) => setFormData({ ...formData, status: e.target.value as Study['status'] })}
+                label="Status"
+              >
+                <MenuItem value="Data Collection">Data Collection</MenuItem>
+                <MenuItem value="Analysis">Analysis</MenuItem>
+                <MenuItem value="Closed">Closed</MenuItem>
+                <MenuItem value="Canceled">Canceled</MenuItem>
+              </Select>
+            </FormControl>
           </Box>
         </DialogContent>
         <DialogActions>
@@ -418,12 +563,12 @@ const StudiesPage: React.FC = () => {
         <DialogTitle>Delete Study</DialogTitle>
         <DialogContent>
           <Typography>
-            Are you sure you want to delete the study "{studyToDelete?.name}"? 
+            Are you sure you want to delete the study "{studyToDelete?.title || studyToDelete?.name}"? 
             This action cannot be undone.
             {studyToDelete && (
               <Box sx={{ mt: 2 }}>
                 <Alert severity="warning">
-                  Note: Studies with submissions cannot be deleted. They must be archived instead.
+                  Note: Studies with submissions cannot be deleted. Set status to Closed or Canceled instead.
                 </Alert>
               </Box>
             )}

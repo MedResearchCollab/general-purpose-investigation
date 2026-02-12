@@ -1,6 +1,6 @@
 from pydantic import BaseModel, EmailStr
-from typing import Optional, List, Dict, Any
-from datetime import datetime
+from typing import Optional, List, Dict, Any, Literal
+from datetime import datetime, date
 
 
 # User Schemas
@@ -62,8 +62,18 @@ class HospitalResponse(HospitalBase):
 class StudyBase(BaseModel):
     name: str
     description: Optional[str] = None
-    is_active: bool = True
-    is_archived: bool = False
+    title: Optional[str] = None
+    summary: Optional[str] = None
+    primary_coordinating_center: Optional[str] = None
+    principal_investigator_name: Optional[str] = None
+    principal_investigator_email: Optional[EmailStr] = None
+    sub_investigator_name: Optional[str] = None
+    sub_investigator_email: Optional[EmailStr] = None
+    general_objective: Optional[str] = None
+    specific_objectives: Optional[str] = None
+    inclusion_exclusion_criteria: Optional[str] = None
+    data_collection_deadline: Optional[date] = None
+    status: Literal["Data Collection", "Analysis", "Closed", "Canceled"] = "Data Collection"
 
 
 class StudyCreate(StudyBase):
@@ -73,8 +83,18 @@ class StudyCreate(StudyBase):
 class StudyUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
-    is_active: Optional[bool] = None
-    is_archived: Optional[bool] = None
+    title: Optional[str] = None
+    summary: Optional[str] = None
+    primary_coordinating_center: Optional[str] = None
+    principal_investigator_name: Optional[str] = None
+    principal_investigator_email: Optional[EmailStr] = None
+    sub_investigator_name: Optional[str] = None
+    sub_investigator_email: Optional[EmailStr] = None
+    general_objective: Optional[str] = None
+    specific_objectives: Optional[str] = None
+    inclusion_exclusion_criteria: Optional[str] = None
+    data_collection_deadline: Optional[date] = None
+    status: Optional[Literal["Data Collection", "Analysis", "Closed", "Canceled"]] = None
 
 
 class StudyResponse(StudyBase):
@@ -96,6 +116,7 @@ class FormField(BaseModel):
     label: str
     type: str  # text, number, date, select, checkbox, radio, textarea
     required: bool = False
+    unique_key: bool = False
     options: Optional[List[str]] = None  # For select/radio
     placeholder: Optional[str] = None
     validation: Optional[Dict[str, Any]] = None  # min, max, pattern, etc.

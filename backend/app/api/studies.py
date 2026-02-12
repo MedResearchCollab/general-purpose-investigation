@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from sqlalchemy import or_
 from typing import List
 from app.database import get_db
 from app.models import Study, Form, StudyForm, User, Submission
@@ -11,21 +12,23 @@ router = APIRouter(prefix="/api/studies", tags=["studies"])
 
 @router.get("", response_model=List[StudyResponse])
 def list_studies(
+    include_closed_canceled: bool = False,
     include_archived: bool = False,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """List studies (filtered by user role and archive status)"""
+    """List studies filtered by role and lifecycle status."""
     query = db.query(Study)
-    
+    show_all_statuses = include_closed_canceled or include_archived
+
     if current_user.role == "admin":
-        # Admins can see all studies, optionally filtered by archive status
-        if not include_archived:
-            query = query.filter(Study.is_archived == False)
+        # Admins can optionally include Closed/Canceled studies.
+        if not show_all_statuses:
+            query = query.filter(or_(Study.status.in_(["Data Collection", "Analysis"]), Study.status.is_(None)))
     else:
-        # Regular users see all active, non-archived studies
-        query = query.filter(Study.is_active == True, Study.is_archived == False)
-    
+        # Regular users only see ongoing studies.
+        query = query.filter(or_(Study.status.in_(["Data Collection", "Analysis"]), Study.status.is_(None)))
+
     studies = query.all()
     return studies
 
@@ -40,8 +43,20 @@ def create_study(
     new_study = Study(
         name=study_data.name,
         description=study_data.description,
-        is_active=study_data.is_active,
-        is_archived=study_data.is_archived,
+        title=study_data.title,
+        summary=study_data.summary,
+        primary_coordinating_center=study_data.primary_coordinating_center,
+        principal_investigator_name=study_data.principal_investigator_name,
+        principal_investigator_email=study_data.principal_investigator_email,
+        sub_investigator_name=study_data.sub_investigator_name,
+        sub_investigator_email=study_data.sub_investigator_email,
+        general_objective=study_data.general_objective,
+        specific_objectives=study_data.specific_objectives,
+        inclusion_exclusion_criteria=study_data.inclusion_exclusion_criteria,
+        data_collection_deadline=study_data.data_collection_deadline,
+        status=study_data.status,
+        is_active=study_data.status in ["Data Collection", "Analysis"],
+        is_archived=study_data.status == "Canceled",
         created_by=current_user.id
     )
     
@@ -118,14 +133,14 @@ def remove_form_from_study(
     return {"message": "Form removed from study successfully"}
 
 
-# Archive/unarchive routes - must come before generic /{study_id} routes
+# Backward-compatible lifecycle routes
 @router.post("/{study_id}/archive", response_model=StudyResponse)
 def archive_study(
     study_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_admin_user)
 ):
-    """Archive a study (admin only)"""
+    """Set study status to Canceled (legacy archive route)."""
     study = db.query(Study).filter(Study.id == study_id).first()
     if not study:
         raise HTTPException(
@@ -134,7 +149,9 @@ def archive_study(
         )
     
     try:
+        study.status = "Canceled"
         study.is_archived = True
+        study.is_active = False
         db.commit()
         db.refresh(study)
     except Exception as e:
@@ -153,7 +170,7 @@ def unarchive_study(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_admin_user)
 ):
-    """Unarchive a study (admin only)"""
+    """Set study status to Data Collection (legacy unarchive route)."""
     study = db.query(Study).filter(Study.id == study_id).first()
     if not study:
         raise HTTPException(
@@ -162,7 +179,9 @@ def unarchive_study(
         )
     
     try:
+        study.status = "Data Collection"
         study.is_archived = False
+        study.is_active = True
         db.commit()
         db.refresh(study)
     except Exception as e:
@@ -211,8 +230,18 @@ def get_study(
         "id": study.id,
         "name": study.name,
         "description": study.description,
-        "is_active": study.is_active,
-        "is_archived": study.is_archived,
+        "title": study.title,
+        "summary": study.summary,
+        "primary_coordinating_center": study.primary_coordinating_center,
+        "principal_investigator_name": study.principal_investigator_name,
+        "principal_investigator_email": study.principal_investigator_email,
+        "sub_investigator_name": study.sub_investigator_name,
+        "sub_investigator_email": study.sub_investigator_email,
+        "general_objective": study.general_objective,
+        "specific_objectives": study.specific_objectives,
+        "inclusion_exclusion_criteria": study.inclusion_exclusion_criteria,
+        "data_collection_deadline": study.data_collection_deadline,
+        "status": study.status,
         "created_by": study.created_by,
         "created_at": study.created_at,
         "forms": forms_data
@@ -240,10 +269,40 @@ def update_study(
         study.name = study_data.name
     if study_data.description is not None:
         study.description = study_data.description
-    if study_data.is_active is not None:
-        study.is_active = study_data.is_active
-    if study_data.is_archived is not None:
-        study.is_archived = study_data.is_archived
+    if study_data.title is not None:
+        study.title = study_data.title
+    if study_data.summary is not None:
+        study.summary = study_data.summary
+    if study_data.primary_coordinating_center is not None:
+        study.primary_coordinating_center = study_data.primary_coordinating_center
+    if study_data.principal_investigator_name is not None:
+        study.principal_investigator_name = study_data.principal_investigator_name
+    if study_data.principal_investigator_email is not None:
+        study.principal_investigator_email = study_data.principal_investigator_email
+    if study_data.sub_investigator_name is not None:
+        study.sub_investigator_name = study_data.sub_investigator_name
+    if study_data.sub_investigator_email is not None:
+        study.sub_investigator_email = study_data.sub_investigator_email
+    if study_data.general_objective is not None:
+        study.general_objective = study_data.general_objective
+    if study_data.specific_objectives is not None:
+        study.specific_objectives = study_data.specific_objectives
+    if study_data.inclusion_exclusion_criteria is not None:
+        study.inclusion_exclusion_criteria = study_data.inclusion_exclusion_criteria
+    if study_data.data_collection_deadline is not None:
+        study.data_collection_deadline = study_data.data_collection_deadline
+    if study_data.status is not None:
+        study.status = study_data.status
+        # Keep legacy flags in sync while old columns still exist.
+        if study_data.status == "Canceled":
+            study.is_archived = True
+            study.is_active = False
+        elif study_data.status in ["Data Collection", "Analysis"]:
+            study.is_archived = False
+            study.is_active = True
+        elif study_data.status == "Closed":
+            study.is_archived = False
+            study.is_active = False
     
     db.commit()
     db.refresh(study)
@@ -270,7 +329,7 @@ def delete_study(
     if submission_count > 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Cannot delete study with {submission_count} submission(s). Please archive it instead."
+            detail=f"Cannot delete study with {submission_count} submission(s). Please set status to Closed or Canceled instead."
         )
     
     # Delete study (cascade will handle StudyForm relationships)

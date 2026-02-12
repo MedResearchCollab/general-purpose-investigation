@@ -16,10 +16,7 @@ import {
   DialogContent,
   Alert,
   CircularProgress,
-  Select,
-  MenuItem,
-  FormControl,
-  InputLabel,
+  TextField,
 } from '@mui/material';
 import api from '../services/api';
 import FormRenderer from '../components/Forms/FormRenderer';
@@ -45,7 +42,20 @@ interface Form {
   id: number;
   name: string;
   schema_json: {
-    fields: any[];
+    fields: Array<{
+      name: string;
+      label: string;
+      type: string;
+      required?: boolean;
+      unique_key?: boolean;
+      options?: string[];
+      placeholder?: string;
+      validation?: {
+        min?: number;
+        max?: number;
+        pattern?: string;
+      };
+    }>;
   };
 }
 
@@ -55,7 +65,7 @@ const SubmissionsPage: React.FC = () => {
   const [forms, setForms] = useState<Form[]>([]);
   const [loading, setLoading] = useState(true);
   const [submissionDialogOpen, setSubmissionDialogOpen] = useState(false);
-  const [selectedStudy, setSelectedStudy] = useState<number | ''>('');
+  const [selectedStudy, setSelectedStudy] = useState<string>('');
   const [selectedForm, setSelectedForm] = useState<Form | null>(null);
   const [selectedSubmission, setSelectedSubmission] = useState<Submission | null>(null);
   const [viewMode, setViewMode] = useState<'create' | 'view' | 'edit'>('create');
@@ -219,7 +229,7 @@ const SubmissionsPage: React.FC = () => {
     const form = study?.forms?.find((f) => f.id === formId) || forms.find((f) => f.id === formId);
     if (form) {
       setSelectedForm(form);
-      setSelectedStudy(studyId);
+      setSelectedStudy(String(studyId));
       setSelectedSubmission(null);
       setViewMode('create');
       setSubmissionDialogOpen(true);
@@ -248,7 +258,7 @@ const SubmissionsPage: React.FC = () => {
         // Create new submission
         const response = await api.post('/api/submissions', {
           form_id: selectedForm.id,
-          study_id: selectedStudy,
+          study_id: Number(selectedStudy),
           data_json: data,
         });
         console.log('Submission created successfully:', response.data);
@@ -289,8 +299,35 @@ const SubmissionsPage: React.FC = () => {
 
   const getAvailableForms = () => {
     if (!selectedStudy) return [];
-    const study = studies.find((s) => s.id === selectedStudy);
+    const study = studies.find((s) => String(s.id) === selectedStudy);
     return study?.forms || [];
+  };
+
+  const getUniqueKeyLabels = (form: Form | null): string[] => {
+    if (!form?.schema_json?.fields) return [];
+    return form.schema_json.fields
+      .filter((field) => field.unique_key)
+      .map((field) => field.label || field.name);
+  };
+
+  const getSubmissionUniqueKeyDisplay = (submission: Submission, form?: Form): string => {
+    if (!form?.schema_json?.fields || !submission?.data_json) return '-';
+
+    const uniqueFields = form.schema_json.fields.filter((field) => field.unique_key);
+    if (uniqueFields.length === 0) return '-';
+
+    const values = uniqueFields
+      .map((field) => {
+        const rawValue = submission.data_json[field.name];
+        if (rawValue === null || rawValue === undefined || `${rawValue}`.trim() === '') {
+          return null;
+        }
+        const label = field.label || field.name;
+        return `${label}: ${rawValue}`;
+      })
+      .filter(Boolean);
+
+    return values.length > 0 ? values.join(' | ') : '-';
   };
 
   if (loading) {
@@ -318,51 +355,81 @@ const SubmissionsPage: React.FC = () => {
           Create New Submission
         </Typography>
         <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-          <FormControl sx={{ minWidth: 200 }}>
-            <InputLabel>Study</InputLabel>
-            <Select
-              value={selectedStudy}
-              onChange={async (e) => {
-                const studyId = e.target.value as number;
-                setSelectedStudy(studyId);
-                setSelectedForm(null);
-                // Refresh study details to get latest forms
-                await refreshStudyDetails(studyId);
-              }}
-              label="Study"
-            >
+          <TextField
+            select
+            label="Study"
+            value={selectedStudy}
+            onChange={async (e) => {
+              const studyId = String(e.target.value);
+              setSelectedStudy(studyId);
+              setSelectedForm(null);
+              // Refresh study details to get latest forms
+              await refreshStudyDetails(Number(studyId));
+            }}
+            SelectProps={{ native: true }}
+            sx={{ minWidth: 240 }}
+          >
+            <option value="" />
+            {studies.map((study) => (
+              <option key={study.id} value={String(study.id)}>
+                {study.name}
+              </option>
+            ))}
+          </TextField>
+          {studies.length > 0 && (
+            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
               {studies.map((study) => (
-                <MenuItem key={study.id} value={study.id}>
+                <Button
+                  key={study.id}
+                  size="small"
+                  variant={selectedStudy === String(study.id) ? 'contained' : 'outlined'}
+                  onClick={async () => {
+                    const studyId = String(study.id);
+                    setSelectedStudy(studyId);
+                    setSelectedForm(null);
+                    await refreshStudyDetails(Number(studyId));
+                  }}
+                >
                   {study.name}
-                </MenuItem>
+                </Button>
               ))}
-            </Select>
-          </FormControl>
+            </Box>
+          )}
           {selectedStudy && (
-            <FormControl sx={{ minWidth: 200 }}>
-              <InputLabel>Form</InputLabel>
-              <Select
-                value={selectedForm?.id || ''}
-                onChange={(e) => {
-                  const form = getAvailableForms().find((f) => f.id === e.target.value);
-                  setSelectedForm(form || null);
-                }}
-                label="Form"
-                disabled={getAvailableForms().length === 0}
-              >
-                {getAvailableForms().length > 0 ? (
-                  getAvailableForms().map((form) => (
-                    <MenuItem key={form.id} value={form.id}>
-                      {form.name}
-                    </MenuItem>
-                  ))
-                ) : (
-                  <MenuItem disabled value="">
-                    No forms assigned
-                  </MenuItem>
-                )}
-              </Select>
-            </FormControl>
+            <TextField
+              select
+              label="Form"
+              value={selectedForm ? String(selectedForm.id) : ''}
+              onChange={(e) => {
+                const formId = String(e.target.value);
+                const form = getAvailableForms().find((f) => String(f.id) === formId);
+                setSelectedForm(form || null);
+              }}
+              SelectProps={{ native: true }}
+              disabled={getAvailableForms().length === 0}
+              sx={{ minWidth: 240 }}
+            >
+              <option value="" />
+              {getAvailableForms().map((form) => (
+                <option key={form.id} value={String(form.id)}>
+                  {form.name}
+                </option>
+              ))}
+            </TextField>
+          )}
+          {selectedStudy && getAvailableForms().length > 0 && (
+            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+              {getAvailableForms().map((form) => (
+                <Button
+                  key={form.id}
+                  size="small"
+                  variant={selectedForm?.id === form.id ? 'contained' : 'outlined'}
+                  onClick={() => setSelectedForm(form)}
+                >
+                  {form.name}
+                </Button>
+              ))}
+            </Box>
           )}
           {selectedStudy && getAvailableForms().length === 0 && (
             <Alert severity="info" sx={{ mt: 1 }}>
@@ -370,12 +437,23 @@ const SubmissionsPage: React.FC = () => {
             </Alert>
           )}
           {selectedForm && selectedStudy && (
-            <Button
-              variant="contained"
-              onClick={() => handleCreateSubmission(selectedStudy as number, selectedForm.id)}
-            >
-              Fill Form
-            </Button>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+              <Button
+                variant="contained"
+                onClick={() => handleCreateSubmission(Number(selectedStudy), selectedForm.id)}
+              >
+                Fill Form
+              </Button>
+              {getUniqueKeyLabels(selectedForm).length > 0 ? (
+                <Alert severity="info" sx={{ py: 0 }}>
+                  Unique key fields: {getUniqueKeyLabels(selectedForm).join(', ')}
+                </Alert>
+              ) : (
+                <Alert severity="warning" sx={{ py: 0 }}>
+                  This form has no unique key configured.
+                </Alert>
+              )}
+            </Box>
           )}
         </Box>
       </Box>
@@ -387,14 +465,16 @@ const SubmissionsPage: React.FC = () => {
               <TableCell>ID</TableCell>
               <TableCell>Study</TableCell>
               <TableCell>Form</TableCell>
+              <TableCell>Unique Key(s)</TableCell>
               <TableCell>Created</TableCell>
+              <TableCell>Last Updated</TableCell>
               <TableCell>Actions</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {submissions.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} align="center">
+                <TableCell colSpan={7} align="center">
                   <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>
                     No submissions found. {error ? 'Error: ' + error : 'Create a new submission above.'}
                   </Typography>
@@ -417,7 +497,13 @@ const SubmissionsPage: React.FC = () => {
                         </Typography>
                       )}
                     </TableCell>
+                    <TableCell>{getSubmissionUniqueKeyDisplay(submission, form)}</TableCell>
                     <TableCell>{new Date(submission.created_at).toLocaleString()}</TableCell>
+                    <TableCell>
+                      {submission.updated_at
+                        ? new Date(submission.updated_at).toLocaleString()
+                        : '-'}
+                    </TableCell>
                     <TableCell>
                       <Box sx={{ display: 'flex', gap: 1 }}>
                         <Button
@@ -484,7 +570,7 @@ const SubmissionsPage: React.FC = () => {
                               data_json: processedData,
                             });
                             setViewMode('view');
-                            setSelectedStudy(submissionData.study_id);
+                            setSelectedStudy(String(submissionData.study_id));
                             setError(''); // Clear any previous errors
                             setSubmissionDialogOpen(true);
                           } else {
@@ -570,7 +656,7 @@ const SubmissionsPage: React.FC = () => {
                                   data_json: processedData,
                                 });
                                 setViewMode('edit');
-                                setSelectedStudy(submissionData.study_id);
+                                setSelectedStudy(String(submissionData.study_id));
                                 setSubmissionDialogOpen(true);
                               } else {
                                 setError('Form not found for this submission');
@@ -624,6 +710,14 @@ const SubmissionsPage: React.FC = () => {
             : `Fill Form: ${selectedForm?.name || 'Form'}`}
         </DialogTitle>
         <DialogContent sx={{ mt: 2 }}>
+          {selectedForm && (
+            <Alert severity="info" sx={{ mb: 2 }}>
+              Unique key fields:{' '}
+              {getUniqueKeyLabels(selectedForm).length > 0
+                ? getUniqueKeyLabels(selectedForm).join(', ')
+                : 'None configured'}
+            </Alert>
+          )}
           {error && (
             <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>
               {error}

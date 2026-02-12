@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Text, JSON
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Date, ForeignKey, Text, JSON, UniqueConstraint
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base
@@ -40,6 +40,18 @@ class Study(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False, index=True)
     description = Column(Text, nullable=True)
+    title = Column(String, nullable=True)
+    summary = Column(Text, nullable=True)
+    primary_coordinating_center = Column(String, nullable=True)
+    principal_investigator_name = Column(String, nullable=True)
+    principal_investigator_email = Column(String, nullable=True)
+    sub_investigator_name = Column(String, nullable=True)
+    sub_investigator_email = Column(String, nullable=True)
+    general_objective = Column(Text, nullable=True)
+    specific_objectives = Column(Text, nullable=True)
+    inclusion_exclusion_criteria = Column(Text, nullable=True)
+    data_collection_deadline = Column(Date, nullable=True)
+    status = Column(String, nullable=False, default="Data Collection", index=True)
     created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
     is_active = Column(Boolean, default=True)
     is_archived = Column(Boolean, default=False, index=True)
@@ -89,4 +101,18 @@ class Submission(Base):
     form = relationship("Form", back_populates="submissions")
     study = relationship("Study", back_populates="submissions")
     user = relationship("User", back_populates="submissions")
+
+
+class SubmissionUniqueKey(Base):
+    __tablename__ = "submission_unique_keys"
+    __table_args__ = (
+        UniqueConstraint("form_id", "key_name", "key_value", name="uq_submission_unique_key"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    submission_id = Column(Integer, ForeignKey("submissions.id"), nullable=False, index=True)
+    form_id = Column(Integer, ForeignKey("forms.id"), nullable=False, index=True)
+    key_name = Column(String, nullable=False, index=True)
+    key_value = Column(String, nullable=False, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
 

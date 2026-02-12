@@ -3,8 +3,6 @@ import {
   Paper,
   Box,
   Button,
-  Typography,
-  Alert,
 } from '@mui/material';
 import FormField from './FormField';
 
@@ -13,6 +11,7 @@ interface FormFieldDef {
   label: string;
   type: string;
   required?: boolean;
+  unique_key?: boolean;
   options?: string[];
   placeholder?: string;
   validation?: {

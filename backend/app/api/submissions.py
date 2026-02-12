@@ -1,13 +1,76 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 from typing import List, Optional
+from datetime import datetime, timezone
 import json
 from app.database import get_db
-from app.models import Submission, Form, Study, StudyForm, User
+from app.models import Submission, Form, Study, StudyForm, User, SubmissionUniqueKey
 from app.schemas import SubmissionCreate, SubmissionUpdate, SubmissionResponse
 from app.middleware.auth_middleware import get_current_user
 
 router = APIRouter(prefix="/api/submissions", tags=["submissions"])
+
+
+def _normalize_unique_value(value) -> str:
+    """Normalize values so uniqueness checks are consistent."""
+    if isinstance(value, str):
+        return value.strip()
+    return str(value).strip()
+
+
+def _extract_unique_key_entries(form: Form, data_json: dict) -> List[dict]:
+    fields = form.schema_json.get("fields", []) if isinstance(form.schema_json, dict) else []
+    unique_fields = [field for field in fields if isinstance(field, dict) and field.get("unique_key") is True]
+
+    if len(unique_fields) == 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This form is invalid: no unique key field is configured. Please contact an administrator."
+        )
+
+    entries = []
+    for field in unique_fields:
+        field_name = field.get("name")
+        label = field.get("label") or field_name
+        raw_value = data_json.get(field_name)
+
+        if raw_value is None or _normalize_unique_value(raw_value) == "":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Unique key field '{label}' is required and cannot be empty."
+            )
+
+        entries.append({
+            "key_name": field_name,
+            "key_value": _normalize_unique_value(raw_value),
+            "label": label,
+        })
+
+    return entries
+
+
+def _ensure_unique_values_available(
+    db: Session,
+    form_id: int,
+    unique_entries: List[dict],
+    exclude_submission_id: Optional[int] = None
+):
+    for entry in unique_entries:
+        query = db.query(SubmissionUniqueKey).filter(
+            SubmissionUniqueKey.form_id == form_id,
+            SubmissionUniqueKey.key_name == entry["key_name"],
+            SubmissionUniqueKey.key_value == entry["key_value"]
+        )
+        if exclude_submission_id is not None:
+            query = query.filter(SubmissionUniqueKey.submission_id != exclude_submission_id)
+
+        existing = query.first()
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Duplicate value for unique key '{entry['label']}': '{entry['key_value']}'."
+            )
 
 
 @router.get("", response_model=List[SubmissionResponse])
@@ -80,6 +143,13 @@ def create_submission(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Study not found"
         )
+
+    study_status = study.status or ("Canceled" if study.is_archived else "Data Collection")
+    if study_status != "Data Collection":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Submissions are only allowed when study status is Data Collection. Current status: {study_status}."
+        )
     
     # Verify form is assigned to study
     study_form = db.query(StudyForm).filter(
@@ -92,6 +162,13 @@ def create_submission(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Form is not assigned to this study"
         )
+
+    unique_entries = _extract_unique_key_entries(form, submission_data.data_json)
+    _ensure_unique_values_available(
+        db=db,
+        form_id=submission_data.form_id,
+        unique_entries=unique_entries
+    )
     
     try:
         # Store submission data as JSON string
@@ -101,12 +178,31 @@ def create_submission(
             form_id=submission_data.form_id,
             study_id=submission_data.study_id,
             user_id=current_user.id,
-            data_json=data_json_str
+            data_json=data_json_str,
+            updated_at=datetime.now(timezone.utc)
         )
         
         db.add(new_submission)
+        db.flush()
+
+        for entry in unique_entries:
+            db.add(
+                SubmissionUniqueKey(
+                    submission_id=new_submission.id,
+                    form_id=submission_data.form_id,
+                    key_name=entry["key_name"],
+                    key_value=entry["key_value"],
+                )
+            )
+
         db.commit()
         db.refresh(new_submission)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Duplicate value detected for a unique key field."
+        )
     except Exception as e:
         db.rollback()
         print(f"Database error creating submission: {e}")  # Debug logging
@@ -197,11 +293,48 @@ def update_submission(
         )
     
     if submission_data.data_json is not None:
+        form = db.query(Form).filter(Form.id == submission.form_id).first()
+        if not form:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Form not found"
+            )
+
+        unique_entries = _extract_unique_key_entries(form, submission_data.data_json)
+        _ensure_unique_values_available(
+            db=db,
+            form_id=submission.form_id,
+            unique_entries=unique_entries,
+            exclude_submission_id=submission.id
+        )
+
         # Store submission data as JSON string
         submission.data_json = json.dumps(submission_data.data_json)
-    
-    db.commit()
-    db.refresh(submission)
+        submission.updated_at = datetime.now(timezone.utc)
+        db.flush()
+        db.query(SubmissionUniqueKey).filter(
+            SubmissionUniqueKey.submission_id == submission.id
+        ).delete(synchronize_session=False)
+
+        for entry in unique_entries:
+            db.add(
+                SubmissionUniqueKey(
+                    submission_id=submission.id,
+                    form_id=submission.form_id,
+                    key_name=entry["key_name"],
+                    key_value=entry["key_value"],
+                )
+            )
+
+    try:
+        db.commit()
+        db.refresh(submission)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Duplicate value detected for a unique key field."
+        )
     
     # Parse the stored JSON data for response
     try:
@@ -240,7 +373,10 @@ def delete_submission(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
         )
-    
+
+    db.query(SubmissionUniqueKey).filter(
+        SubmissionUniqueKey.submission_id == submission.id
+    ).delete(synchronize_session=False)
     db.delete(submission)
     db.commit()
     

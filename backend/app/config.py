@@ -1,5 +1,6 @@
 from pydantic_settings import BaseSettings
 from typing import List
+from urllib.parse import urlparse
 
 
 class Settings(BaseSettings):
@@ -23,7 +24,26 @@ class Settings(BaseSettings):
 
     @property
     def cors_origins_list(self) -> List[str]:
-        return [origin.strip() for origin in self.CORS_ORIGINS.split(",")]
+        configured = [origin.strip() for origin in self.CORS_ORIGINS.split(",") if origin.strip()]
+        expanded = set(configured)
+
+        # Keep localhost and 127.0.0.1 in sync to avoid common local CORS mismatches.
+        for origin in configured:
+            parsed = urlparse(origin)
+            if not parsed.scheme or not parsed.hostname:
+                continue
+
+            if parsed.hostname == "localhost":
+                alt_host = "127.0.0.1"
+            elif parsed.hostname == "127.0.0.1":
+                alt_host = "localhost"
+            else:
+                continue
+
+            port = f":{parsed.port}" if parsed.port else ""
+            expanded.add(f"{parsed.scheme}://{alt_host}{port}")
+
+        return sorted(expanded)
 
 
 settings = Settings()
