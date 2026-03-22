@@ -5,12 +5,12 @@ import os
 
 from app.config import settings
 
-# Create database directory if it doesn't exist
-os.makedirs(os.path.dirname(settings.DATABASE_URL.replace("sqlite:///", "")), exist_ok=True)
-
-engine = create_engine(
-    settings.DATABASE_URL, connect_args={"check_same_thread": False}
-)
+_db_url = settings.DATABASE_URL
+if _db_url.startswith("sqlite"):
+    os.makedirs(os.path.dirname(_db_url.replace("sqlite:///", "")), exist_ok=True)
+    engine = create_engine(_db_url, connect_args={"check_same_thread": False})
+else:
+    engine = create_engine(_db_url)
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 

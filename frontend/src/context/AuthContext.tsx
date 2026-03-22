@@ -1,6 +1,5 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import api from '../services/api';
-import axios from 'axios';
 
 interface User {
   id: number;
@@ -25,69 +24,47 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const storedToken = localStorage.getItem('token');
-    const storedUser = localStorage.getItem('user');
-
-    if (storedToken && storedUser) {
-      setToken(storedToken);
-      setUser(JSON.parse(storedUser));
+  const fetchUser = useCallback(async () => {
+    try {
+      const res = await api.get('/api/auth/me');
+      setUser(res.data);
+    } catch {
+      setUser(null);
     }
-    setLoading(false);
   }, []);
 
+  useEffect(() => {
+    // Restore session from httpOnly cookie (no token in localStorage)
+    fetchUser().finally(() => setLoading(false));
+  }, [fetchUser]);
+
   const login = async (email: string, password: string) => {
-    try {
-      console.log('Attempting login...');
-      const response = await api.post('/api/auth/login', { email, password });
-      console.log('Login response:', response.data);
-      const { access_token } = response.data;
-      
-      if (!access_token) {
-        throw new Error('No access token received');
-      }
-      
-      // Store token first
-      localStorage.setItem('token', access_token);
-      
-      // Get user info with the token
-      const userResponse = await axios.get('http://localhost:8000/api/auth/me', {
-        headers: {
-          'Authorization': `Bearer ${access_token}`
-        }
-      });
-      const userData = userResponse.data;
-      console.log('User data:', userData);
-      
-      localStorage.setItem('user', JSON.stringify(userData));
-      setToken(access_token);
-      setUser(userData);
-    } catch (error: any) {
-      console.error('Login error details:', error);
-      console.error('Error response:', error.response);
-      const errorMessage = error.response?.data?.detail || error.message || 'Login failed';
-      throw new Error(errorMessage);
+    const response = await api.post('/api/auth/login', { email, password }, { withCredentials: true });
+    if (!response.data?.access_token) {
+      throw new Error('No access token received');
     }
+    const userRes = await api.get('/api/auth/me');
+    setUser(userRes.data);
   };
 
-  const logout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    setToken(null);
-    setUser(null);
+  const logout = async () => {
+    try {
+      await api.post('/api/auth/logout');
+    } finally {
+      setUser(null);
+    }
   };
 
   return (
     <AuthContext.Provider
       value={{
         user,
-        token,
+        token: null, // token is in httpOnly cookie; not exposed to JS
         login,
         logout,
-        isAuthenticated: !!token && !!user,
+        isAuthenticated: !!user,
         isAdmin: user?.role === 'admin',
         loading,
       }}

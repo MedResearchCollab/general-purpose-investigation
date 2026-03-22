@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from datetime import timedelta
 from app.database import get_db
@@ -13,29 +14,39 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 @router.post("/login", response_model=Token)
 def login(credentials: LoginRequest, db: Session = Depends(get_db)):
-    """Authenticate user and return JWT token"""
+    """Authenticate user; return JWT and set httpOnly cookie for browser clients."""
     user = db.query(User).filter(User.email == credentials.email).first()
-    
+
     if not user or not verify_password(credentials.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
+
     if not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="User account is inactive"
+            detail="User account is inactive",
         )
-    
+
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
         data={"sub": str(user.id), "email": user.email, "role": user.role},
-        expires_delta=access_token_expires
+        expires_delta=access_token_expires,
     )
-    
-    return {"access_token": access_token, "token_type": "bearer"}
+    max_age = int(access_token_expires.total_seconds())
+    response = JSONResponse(content={"access_token": access_token, "token_type": "bearer"})
+    response.set_cookie(
+        key=settings.AUTH_COOKIE_NAME,
+        value=access_token,
+        path="/",
+        max_age=max_age,
+        httponly=True,
+        samesite=settings.AUTH_COOKIE_SAMESITE.lower(),
+        secure=settings.AUTH_COOKIE_SECURE or settings.is_production,
+    )
+    return response
 
 
 @router.post("/register", response_model=UserResponse)
@@ -74,6 +85,20 @@ def register(user_data: RegisterRequest, db: Session = Depends(get_db)):
 
 @router.get("/me", response_model=UserResponse)
 def get_current_user_info(current_user: User = Depends(get_current_user)):
-    """Get current authenticated user information"""
+    """Get current authenticated user information."""
     return current_user
+
+
+@router.post("/logout")
+def logout():
+    """Clear auth cookie (for browser clients using httpOnly cookie)."""
+    response = JSONResponse(content={"detail": "Logged out"})
+    response.delete_cookie(
+        key=settings.AUTH_COOKIE_NAME,
+        path="/",
+        httponly=True,
+        samesite=settings.AUTH_COOKIE_SAMESITE.lower(),
+        secure=settings.AUTH_COOKIE_SECURE or settings.is_production,
+    )
+    return response
 

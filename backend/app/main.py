@@ -1,10 +1,13 @@
+import logging
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from starlette.middleware.base import BaseHTTPMiddleware
 from app.database import engine, Base
 from app.config import settings
 from app.api import auth, users, hospitals, studies, forms, submissions, export
-import traceback
+
+logger = logging.getLogger(__name__)
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
@@ -12,28 +15,50 @@ Base.metadata.create_all(bind=engine)
 app = FastAPI(
     title="Oncology Research Data Collection API",
     description="API for collecting medical research data from multiple hospitals",
-    version="1.0.0"
+    version="1.0.0",
+    docs_url=None if settings.is_production else "/docs",
+    redoc_url=None if settings.is_production else "/redoc",
+    openapi_url=None if settings.is_production else "/openapi.json",
 )
 
-# CORS middleware - must be added before other middleware
-# Get CORS origins from settings
-cors_origins = settings.cors_origins_list
-print(f"CORS Origins configured: {cors_origins}")  # Debug log
 
+@app.on_event("startup")
+def startup_validate_secrets():
+    """In production, require SECRET_KEY and ENCRYPTION_KEY to be set."""
+    settings.validate_production_secrets()
+
+
+# Security headers middleware
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        if settings.is_production:
+            # Only set when served over HTTPS (e.g. behind TLS termination)
+            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        return response
+
+
+app.add_middleware(SecurityHeadersMiddleware)
+
+# CORS middleware
+cors_origins = settings.cors_origins_list
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
     allow_credentials=True,
-    allow_methods=["*"],  # Allow all methods
-    allow_headers=["*"],  # Allow all headers
+    allow_methods=["*"],
+    allow_headers=["*"],
     expose_headers=["*"],
     max_age=3600,
 )
 
-# Add exception handler to ensure CORS headers are always included for HTTPExceptions
+
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
-    """Ensure CORS headers are included in HTTPException responses"""
+    """Ensure CORS headers are included in HTTPException responses."""
     origin = request.headers.get("origin")
     if origin in cors_origins:
         response = JSONResponse(
@@ -42,26 +67,25 @@ async def http_exception_handler(request: Request, exc: HTTPException):
             headers={
                 "Access-Control-Allow-Origin": origin,
                 "Access-Control-Allow-Credentials": "true",
-            }
+            },
         )
         return response
     raise exc
 
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    """Handle unhandled exceptions and ensure CORS headers are included"""
+    """Log exception server-side; return generic message to client."""
+    logger.exception("Unhandled exception: %s", exc)
     origin = request.headers.get("origin")
-    print(f"Unhandled exception: {type(exc).__name__}: {str(exc)}")  # Debug logging
-    import traceback
-    traceback.print_exc()
     if origin in cors_origins:
         response = JSONResponse(
             status_code=500,
-            content={"detail": f"Internal server error: {str(exc)}"},
+            content={"detail": "Internal server error"},
             headers={
                 "Access-Control-Allow-Origin": origin,
                 "Access-Control-Allow-Credentials": "true",
-            }
+            },
         )
         return response
     raise exc
@@ -78,9 +102,11 @@ app.include_router(export.router)
 
 @app.get("/")
 def root():
-    return {
+    payload = {
         "message": "Oncology Research Data Collection API",
-        "docs": "/docs",
-        "version": "1.0.0"
+        "version": "1.0.0",
     }
+    if not settings.is_production:
+        payload["docs"] = "/docs"
+    return payload
 

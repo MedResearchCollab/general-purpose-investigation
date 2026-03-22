@@ -146,6 +146,17 @@ The frontend will be available at `http://localhost:3000`.
 
 3. Log in with the created admin account through the web interface.
 
+## Production deployment
+
+For deploying on the internet (HTTPS, production secrets, first user, frontend build), follow **[DEPLOYMENT_STEPS.md](DEPLOYMENT_STEPS.md)**. It covers:
+
+- Generating production keys: `python scripts/generate_production_keys.py`
+- Backend `.env` (ENVIRONMENT, SECRET_KEY, ENCRYPTION_KEY, CORS_ORIGINS, optional PostgreSQL)
+- Creating the first admin: `python scripts/register_first_user.py` or curl
+- Building the frontend with `REACT_APP_API_URL` set
+
+See also [PRODUCTION.md](PRODUCTION.md) for readiness and [SECURITY.md](SECURITY.md) for security details.
+
 ## Usage Guide
 
 ### For Administrators

@@ -1,13 +1,13 @@
 import base64
 import json
 from cryptography.fernet import Fernet
-from app.config import settings
+from app.config import settings, DEV_ENCRYPTION_KEY
 
 
 def get_encryption_key() -> bytes:
-    """Get or generate encryption key"""
+    """Get or generate encryption key."""
     key = settings.ENCRYPTION_KEY
-    if key == "your-32-byte-encryption-key-base64-encoded":
+    if key == DEV_ENCRYPTION_KEY:
         # Generate a new key if not set
         key = Fernet.generate_key()
         print(f"WARNING: Generated new encryption key. Set ENCRYPTION_KEY={key.decode()} in .env")

@@ -5,9 +5,10 @@
 ### Backend (100% Complete)
 - ✅ FastAPI server running on http://localhost:8000
 - ✅ Database initialized with SQLite
-- ✅ Admin user created:
+- ✅ Admin user (development only):
   - Email: `ctic_generic@example.com`
   - Password: `ctic_researcher`
+  - **Security**: Do not use these in production. Use `POST /api/auth/register` to create the first admin there. The `create_admin.py` script will not run when `ENVIRONMENT=production`.
 - ✅ All API endpoints working
 - ✅ Authentication system active
 - ✅ Data encryption enabled

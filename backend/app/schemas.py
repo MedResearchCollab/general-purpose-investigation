@@ -1,6 +1,15 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, field_validator
 from typing import Optional, List, Dict, Any, Literal
 from datetime import datetime, date
+
+# Minimum password length for security
+MIN_PASSWORD_LENGTH = 8
+
+
+def _validate_password_length(value: str) -> str:
+    if len(value) < MIN_PASSWORD_LENGTH:
+        raise ValueError(f"Password must be at least {MIN_PASSWORD_LENGTH} characters")
+    return value
 
 
 # User Schemas
@@ -14,6 +23,11 @@ class UserBase(BaseModel):
 class UserCreate(UserBase):
     password: str
 
+    @field_validator("password")
+    @classmethod
+    def password_min_length(cls, v: str) -> str:
+        return _validate_password_length(v)
+
 
 class UserUpdate(BaseModel):
     email: Optional[EmailStr] = None
@@ -22,6 +36,13 @@ class UserUpdate(BaseModel):
     hospital_id: Optional[int] = None
     is_active: Optional[bool] = None
     password: Optional[str] = None
+
+    @field_validator("password")
+    @classmethod
+    def password_min_length(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or v == "":
+            return v
+        return _validate_password_length(v)
 
 
 class UserResponse(UserBase):
@@ -199,6 +220,11 @@ class RegisterRequest(BaseModel):
     email: EmailStr
     password: str
     full_name: str
+
+    @field_validator("password")
+    @classmethod
+    def password_min_length(cls, v: str) -> str:
+        return _validate_password_length(v)
 
 
 # Export Schemas
