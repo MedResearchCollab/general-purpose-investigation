@@ -36,14 +36,25 @@ def startup_bootstrap_admin():
     Create a one-time bootstrap admin only when the user table is empty.
     This lets fresh deployments access the app immediately.
     """
-    bootstrap_email = "ctic_admin@medstudy.local"
+    bootstrap_email = "ctic_admin@medstudycollect.com"
     bootstrap_password = "change_me_soon"
     bootstrap_full_name = "ctic_admin"
+    legacy_bootstrap_email = "ctic_admin@medstudy.local"
 
     db = SessionLocal()
     try:
         existing_user = db.query(User).first()
         if existing_user:
+            # Backward compatibility: fix previously bootstrapped invalid `.local` email.
+            legacy_user = db.query(User).filter(User.email == legacy_bootstrap_email).first()
+            if legacy_user and not db.query(User).filter(User.email == bootstrap_email).first():
+                legacy_user.email = bootstrap_email
+                db.commit()
+                logger.warning(
+                    "Updated legacy bootstrap admin email from %s to %s.",
+                    legacy_bootstrap_email,
+                    bootstrap_email,
+                )
             return
 
         admin_user = User(
