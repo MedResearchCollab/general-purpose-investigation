@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from datetime import timedelta
 from app.database import get_db
 from app.models import User
-from app.schemas import LoginRequest, RegisterRequest, Token, UserResponse
+from app.schemas import ChangePasswordRequest, LoginRequest, RegisterRequest, Token, UserResponse
 from app.auth import verify_password, get_password_hash, create_access_token
 from app.config import settings
 from app.middleware.auth_middleware import get_current_user
@@ -101,4 +101,23 @@ def logout():
         secure=settings.AUTH_COOKIE_SECURE or settings.is_production,
     )
     return response
+
+
+@router.post("/change-password")
+def change_password(
+    payload: ChangePasswordRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Allow authenticated users to rotate their own password."""
+    if not verify_password(payload.current_password, current_user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Current password is incorrect",
+        )
+
+    current_user.password_hash = get_password_hash(payload.new_password)
+    db.commit()
+
+    return {"message": "Password updated successfully"}
 

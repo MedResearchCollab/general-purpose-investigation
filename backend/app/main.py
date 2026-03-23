@@ -3,8 +3,10 @@ from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
-from app.database import engine, Base
+from app.database import Base, SessionLocal, engine
 from app.config import settings
+from app.auth import get_password_hash
+from app.models import User
 from app.api import auth, users, hospitals, studies, forms, submissions, export
 
 logger = logging.getLogger(__name__)
@@ -26,6 +28,44 @@ app = FastAPI(
 def startup_validate_secrets():
     """In production, require SECRET_KEY and ENCRYPTION_KEY to be set."""
     settings.validate_production_secrets()
+
+
+@app.on_event("startup")
+def startup_bootstrap_admin():
+    """
+    Create a one-time bootstrap admin only when the user table is empty.
+    This lets fresh deployments access the app immediately.
+    """
+    bootstrap_email = "ctic_admin@medstudy.local"
+    bootstrap_password = "change_me_soon"
+    bootstrap_full_name = "ctic_admin"
+
+    db = SessionLocal()
+    try:
+        existing_user = db.query(User).first()
+        if existing_user:
+            return
+
+        admin_user = User(
+            email=bootstrap_email,
+            password_hash=get_password_hash(bootstrap_password),
+            full_name=bootstrap_full_name,
+            role="admin",
+            is_active=True,
+        )
+        db.add(admin_user)
+        db.commit()
+        logger.warning(
+            "Bootstrap admin created for first login: email=%s full_name=%s. "
+            "Rotate password immediately using /api/auth/change-password.",
+            bootstrap_email,
+            bootstrap_full_name,
+        )
+    except Exception:
+        db.rollback()
+        logger.exception("Failed creating one-time bootstrap admin user.")
+    finally:
+        db.close()
 
 
 # Security headers middleware
