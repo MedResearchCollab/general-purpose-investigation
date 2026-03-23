@@ -1,6 +1,18 @@
 import axios from 'axios';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+const isLocalHost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+
+const inferRailwayBackendUrl = (): string | null => {
+  const { protocol, hostname } = window.location;
+  if (!hostname.endsWith('.up.railway.app') || !hostname.includes('frontend')) {
+    return null;
+  }
+  return `${protocol}//${hostname.replace('frontend', 'backend')}`;
+};
+
+const API_BASE_URL =
+  process.env.REACT_APP_API_URL ||
+  (isLocalHost ? 'http://localhost:8000' : inferRailwayBackendUrl() || `${window.location.protocol}//${window.location.hostname}`);
 
 const api = axios.create({
   baseURL: API_BASE_URL,
