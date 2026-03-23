@@ -7,7 +7,7 @@ WORKDIR /app
 COPY package.json package-lock.json* .npmrc* ./
 
 # Install dependencies - use npm's cache dir to avoid EBUSY with node_modules/.cache
-RUN --mount=type=cache,target=/root/.npm \
+RUN --mount=type=cache,id=npm-cache,target=/root/.npm \
     npm install --legacy-peer-deps --prefer-offline
 
 # Copy source and build
