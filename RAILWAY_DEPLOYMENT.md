@@ -75,6 +75,12 @@ The repo includes **`psycopg2-binary`** in `backend/requirements.txt`, so the Ni
 
 For **local** Postgres, use the repo root **`docker-compose.yml`** (`docker compose up -d postgres`) and set `DATABASE_URL=postgresql://medstudy:medstudy@localhost:5432/medstudy` in `backend/.env` (see `backend/.env.example`).
 
+#### If the backend crashes: `Could not parse SQLAlchemy URL`
+
+That usually means **`DATABASE_URL` is not a full connection string**. For example, pasting only `trolley.proxy.rlwy.net:15889` (from **Postgres → Networking → Public TCP proxy**) is **wrong** — that is host and port only, with no `postgresql://`, user, password, or database name.
+
+**Fix:** On the **backend** service, remove that value. Add **`DATABASE_URL`** again using **Add reference** → select your **Postgres** service → choose the variable named **`DATABASE_URL`** from the **Postgres → Variables** tab (Railway’s full URL, often using `postgres.railway.internal` for private networking). Redeploy the backend.
+
 ### Generate a public URL (Backend)
 
 1. Go to **Settings** → **Networking**.
