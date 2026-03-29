@@ -8,6 +8,7 @@ import {
   Box,
   Alert,
 } from '@mui/material';
+import { AxiosError } from 'axios';
 import { useAuth } from '../context/AuthContext';
 
 const Login: React.FC = () => {
@@ -16,6 +17,11 @@ const Login: React.FC = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
+
+  const getLoginErrorMessage = (error: unknown): string => {
+    const axiosError = error as AxiosError<{ detail?: string }>;
+    return axiosError.response?.data?.detail || axiosError.message || 'Login failed';
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,9 +34,9 @@ const Login: React.FC = () => {
       console.log('Login successful, navigating...');
       // Use window.location for reliable navigation
       window.location.href = '/';
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Login error:', err);
-      setError(err.message || 'Login failed');
+      setError(getLoginErrorMessage(err));
       setLoading(false);
     }
   };

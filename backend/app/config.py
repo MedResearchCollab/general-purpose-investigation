@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     AUTH_COOKIE_NAME: str = "access_token"
     AUTH_COOKIE_SAMESITE: str = "lax"  # lax | strict | none
     AUTH_COOKIE_SECURE: bool = False   # set True in production (HTTPS)
+    BOOTSTRAP_RESET_SECRET: str = ""
 
     class Config:
         env_file = ".env"

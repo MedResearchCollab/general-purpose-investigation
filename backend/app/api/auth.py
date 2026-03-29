@@ -4,7 +4,14 @@ from sqlalchemy.orm import Session
 from datetime import timedelta
 from app.database import get_db
 from app.models import User
-from app.schemas import ChangePasswordRequest, LoginRequest, RegisterRequest, Token, UserResponse
+from app.schemas import (
+    BootstrapPasswordResetRequest,
+    ChangePasswordRequest,
+    LoginRequest,
+    RegisterRequest,
+    Token,
+    UserResponse,
+)
 from app.auth import verify_password, get_password_hash, create_access_token
 from app.config import settings
 from app.middleware.auth_middleware import get_current_user
@@ -120,4 +127,40 @@ def change_password(
     db.commit()
 
     return {"message": "Password updated successfully"}
+
+
+@router.post("/bootstrap-reset-password")
+def bootstrap_reset_password(
+    payload: BootstrapPasswordResetRequest,
+    db: Session = Depends(get_db),
+):
+    """
+    Emergency recovery endpoint.
+    Works only when BOOTSTRAP_RESET_SECRET is configured and matches payload.
+    """
+    configured_secret = settings.BOOTSTRAP_RESET_SECRET.strip()
+    if not configured_secret:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Password recovery is disabled",
+        )
+
+    if payload.reset_secret != configured_secret:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid reset secret",
+        )
+
+    user = db.query(User).filter(User.email == payload.email).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
+    user.password_hash = get_password_hash(payload.new_password)
+    user.is_active = True
+    db.commit()
+
+    return {"message": "Password reset successfully. Log in and rotate credentials immediately."}
 

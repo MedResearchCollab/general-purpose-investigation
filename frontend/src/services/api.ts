@@ -23,13 +23,26 @@ const api = axios.create({
   withCredentials: true, // send httpOnly auth cookie with every request
 });
 
-// Handle 401: redirect to login only for real API calls, not for the initial session check
+const getRequestPath = (url?: string): string => {
+  if (!url) return '';
+  try {
+    // Support both absolute and relative URLs from axios config
+    return new URL(url, API_BASE_URL).pathname;
+  } catch {
+    return url;
+  }
+};
+
+const shouldSkipUnauthorizedRedirect = (path: string): boolean =>
+  path.endsWith('/api/auth/me') || path.endsWith('/api/auth/login');
+
+// Handle 401: redirect to login for protected API calls only.
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      const isSessionCheck = error.config?.url?.includes?.('/api/auth/me');
-      if (!isSessionCheck) {
+      const requestPath = getRequestPath(error.config?.url);
+      if (!shouldSkipUnauthorizedRedirect(requestPath)) {
         window.location.href = '/login';
       }
     }

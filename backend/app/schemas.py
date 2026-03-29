@@ -237,6 +237,17 @@ class ChangePasswordRequest(BaseModel):
         return _validate_password_length(v)
 
 
+class BootstrapPasswordResetRequest(BaseModel):
+    email: EmailStr
+    new_password: str
+    reset_secret: str
+
+    @field_validator("new_password")
+    @classmethod
+    def new_password_min_length(cls, v: str) -> str:
+        return _validate_password_length(v)
+
+
 # Export Schemas
 class ExportRequest(BaseModel):
     study_id: Optional[int] = None
