@@ -39,6 +39,38 @@ class Settings(BaseSettings):
     def is_production(self) -> bool:
         return self.ENVIRONMENT.strip().lower() == "production"
 
+    @property
+    def _cors_allows_remote_origin(self) -> bool:
+        """True if any allowed CORS origin is not localhost (split frontend/API, e.g. Railway)."""
+        for origin in self.cors_origins_list:
+            parsed = urlparse(origin)
+            host = (parsed.hostname or "").lower()
+            if host not in ("", "localhost", "127.0.0.1"):
+                return True
+        return False
+
+    @property
+    def auth_cookie_samesite_value(self) -> str:
+        """
+        SameSite=Lax blocks sending httpOnly cookies on cross-site XHR (SPA on host A, API on host B).
+        When CORS allows a non-local origin, use SameSite=None + Secure so browsers attach the cookie.
+        """
+        raw = (self.AUTH_COOKIE_SAMESITE or "lax").strip().lower()
+        if raw not in ("lax", "strict", "none"):
+            raw = "lax"
+        if raw == "none":
+            return "none"
+        if self._cors_allows_remote_origin:
+            return "none"
+        return raw
+
+    @property
+    def auth_cookie_secure_value(self) -> bool:
+        """SameSite=None requires Secure in modern browsers."""
+        if self.auth_cookie_samesite_value == "none":
+            return True
+        return self.AUTH_COOKIE_SECURE or self.is_production
+
     def validate_production_secrets(self) -> None:
         """Raise if in production but default secrets are still in use."""
         if not self.is_production:

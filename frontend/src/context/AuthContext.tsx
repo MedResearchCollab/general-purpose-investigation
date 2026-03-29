@@ -42,10 +42,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const login = async (email: string, password: string) => {
     const response = await api.post('/api/auth/login', { email, password }, { withCredentials: true });
-    if (!response.data?.access_token) {
+    const accessToken = response.data?.access_token;
+    if (!accessToken) {
       throw new Error('No access token received');
     }
-    const userRes = await api.get('/api/auth/me');
+    // Bearer works immediately; cookie may lag one tick. Backend accepts either.
+    const userRes = await api.get('/api/auth/me', {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
     setUser(userRes.data);
   };
 

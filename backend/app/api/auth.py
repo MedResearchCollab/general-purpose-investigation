@@ -49,8 +49,8 @@ def login(credentials: LoginRequest, db: Session = Depends(get_db)):
         path="/",
         max_age=max_age,
         httponly=True,
-        samesite=settings.AUTH_COOKIE_SAMESITE.lower(),
-        secure=settings.AUTH_COOKIE_SECURE or settings.is_production,
+        samesite=settings.auth_cookie_samesite_value,
+        secure=settings.auth_cookie_secure_value,
     )
     return response
 
@@ -103,8 +103,8 @@ def logout():
         key=settings.AUTH_COOKIE_NAME,
         path="/",
         httponly=True,
-        samesite=settings.AUTH_COOKIE_SAMESITE.lower(),
-        secure=settings.AUTH_COOKIE_SECURE or settings.is_production,
+        samesite=settings.auth_cookie_samesite_value,
+        secure=settings.auth_cookie_secure_value,
     )
     return response
 
