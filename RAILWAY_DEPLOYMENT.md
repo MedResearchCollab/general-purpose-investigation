@@ -102,8 +102,14 @@ Add this **before the first build** (it is used at build time):
 | Variable             | Value                              | Required |
 |----------------------|------------------------------------|----------|
 | `REACT_APP_API_URL` | Your backend URL, e.g. `https://your-backend.up.railway.app` | Yes      |
+| `REACT_APP_API_TIMEOUT_MS` | Axios timeout in ms (default **60000** in code if unset) | No       |
 
-Use the backend domain you generated in Step 2. **No trailing slash.**
+Use the backend domain you generated in Step 2. **No trailing slash.** If this is missing or wrong, the SPA may call `/api/...` on the **frontend** host (no API) or guess the backend URL by swapping `frontend` → `backend` in the hostname — that only works when your Railway domains follow that pattern. **Always set `REACT_APP_API_URL` to the backend’s public URL** and redeploy the frontend after changing it.
+
+#### Login shows `timeout of …ms exceeded`
+
+1. **Confirm the API URL:** In the browser devtools Network tab, open the failing `login` request and check the **full request URL**. It must be your **backend** Railway domain (e.g. `https://…backend….up.railway.app/api/auth/login`), not the frontend host. If it hits the frontend domain, set **`REACT_APP_API_URL`** and **rebuild** the frontend.
+2. **Backend / database:** Open **Backend → Deploy Logs**. If Postgres is misconfigured, the API can hang until the DB driver times out. Ensure **`DATABASE_URL`** is a referenced variable from the Postgres service (not the TCP proxy host only). Try **`DATABASE_SSLMODE`** = `require` if you see SSL errors in logs.
 
 ### Generate a public URL (Frontend)
 

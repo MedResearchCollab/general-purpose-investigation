@@ -25,8 +25,11 @@ else:
         raise RuntimeError("DATABASE_URL for PostgreSQL must start with postgresql:// or postgres://")
 
     sslmode = (settings.DATABASE_SSLMODE or "").strip()
-    connect_args = {"sslmode": sslmode} if sslmode else {}
-    engine = create_engine(_db_url, connect_args=connect_args)
+    # Fail fast if Postgres is unreachable (avoids login requests hanging until the client times out).
+    connect_args: dict = {"connect_timeout": 10}
+    if sslmode:
+        connect_args["sslmode"] = sslmode
+    engine = create_engine(_db_url, connect_args=connect_args, pool_pre_ping=True)
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 

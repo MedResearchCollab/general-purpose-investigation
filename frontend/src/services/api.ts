@@ -14,12 +14,15 @@ const API_BASE_URL =
   process.env.REACT_APP_API_URL ||
   (isLocalHost ? 'http://localhost:8000' : inferRailwayBackendUrl() || `${window.location.protocol}//${window.location.hostname}`);
 
+// Railway cold starts and first DB connection can exceed 10s; explicit REACT_APP_API_URL is recommended.
+const API_TIMEOUT_MS = Number(process.env.REACT_APP_API_TIMEOUT_MS) || 60000;
+
 const api = axios.create({
   baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 10000,
+  timeout: API_TIMEOUT_MS,
   withCredentials: true, // send httpOnly auth cookie with every request
 });
 
