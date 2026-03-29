@@ -1,0 +1,25 @@
+# Local PostgreSQL for development (optional). SQLite remains the default if DATABASE_URL is unset.
+#
+# Start: docker compose up -d postgres
+# Backend .env:
+#   DATABASE_URL=postgresql://medstudy:medstudy@localhost:5432/medstudy
+#
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: medstudy
+      POSTGRES_PASSWORD: medstudy
+      POSTGRES_DB: medstudy
+    ports:
+      - "5432:5432"
+    volumes:
+      - medstudy_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U medstudy -d medstudy"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  medstudy_pgdata:

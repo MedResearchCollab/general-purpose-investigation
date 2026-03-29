@@ -49,6 +49,8 @@ Add these in **Variables**:
 | `ENCRYPTION_KEY`   | From `python scripts/generate_production_keys.py`  | Yes      |
 | `CORS_ORIGINS`     | Your frontend URL, e.g. `https://your-frontend.up.railway.app` | Yes      |
 | `AUTH_COOKIE_SECURE` | `true`                                | Yes      |
+| `DATABASE_URL`     | **Reference** from Railway PostgreSQL (see Database below) | **Yes** for durable data |
+| `DATABASE_SSLMODE` | `require` — only if Postgres connections fail with SSL errors | No       |
 
 ### Generate production keys (on your machine)
 
@@ -61,8 +63,17 @@ Copy the output and add `SECRET_KEY` and `ENCRYPTION_KEY` to the backend's Varia
 
 ### Database
 
-- **SQLite (default):** Works for small deployments. Data may be lost on redeploy on Railway (ephemeral disk).
-- **PostgreSQL (recommended):** Add a PostgreSQL service in Railway, copy its `DATABASE_URL`, and add it to the backend Variables. Install the driver: add `psycopg2-binary` to `requirements.txt` or use `requirements-prod.txt` if you have one.
+- **SQLite (default):** No extra setup. On Railway the filesystem is often **ephemeral** — data can be **lost on redeploy**. Fine for quick tests only.
+- **PostgreSQL (recommended for staging/production):**
+  1. In the same Railway project, click **+ New** → **Database** → **PostgreSQL**.
+  2. Open your **backend** service → **Variables**.
+  3. Click **Add variable** → **Add reference** → select the Postgres plugin → choose **`DATABASE_URL`**. Railway wires the URL automatically.
+  4. Redeploy the backend. Tables are created on startup (`create_all`); the bootstrap admin user is created only when the `users` table is empty.
+  5. If you see SSL connection errors, add **`DATABASE_SSLMODE`** = `require` on the backend.
+
+The repo includes **`psycopg2-binary`** in `backend/requirements.txt`, so the Nixpacks build installs the Postgres driver without extra build commands.
+
+For **local** Postgres, use the repo root **`docker-compose.yml`** (`docker compose up -d postgres`) and set `DATABASE_URL=postgresql://medstudy:medstudy@localhost:5432/medstudy` in `backend/.env` (see `backend/.env.example`).
 
 ### Generate a public URL (Backend)
 
@@ -130,9 +141,10 @@ Or use `python scripts/register_first_user.py` with `API_URL` set to your backen
 
 ## Summary
 
-| Service  | Root Directory | Key env vars                                              |
-|----------|----------------|-----------------------------------------------------------|
-| Backend  | `backend`      | `ENVIRONMENT`, `SECRET_KEY`, `ENCRYPTION_KEY`, `CORS_ORIGINS`, `AUTH_COOKIE_SECURE` |
-| Frontend | `frontend`     | `REACT_APP_API_URL`                                       |
+| Service    | Root Directory | Key env vars |
+|------------|----------------|--------------|
+| Backend    | `backend`      | `ENVIRONMENT`, `SECRET_KEY`, `ENCRYPTION_KEY`, `CORS_ORIGINS`, `AUTH_COOKIE_SECURE`, plus **`DATABASE_URL`** (from Postgres reference) |
+| Frontend   | `frontend`     | `REACT_APP_API_URL` |
+| PostgreSQL | (plugin)       | (none — attach `DATABASE_URL` to backend via **Reference**) |
 
 Ensure `backend/railway.json` and `frontend/railway.json` are committed and pushed. Then set each service's root directory in Railway and add the environment variables above.

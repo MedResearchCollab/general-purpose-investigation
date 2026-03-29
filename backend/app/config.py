@@ -20,8 +20,10 @@ class Settings(BaseSettings):
     # Encryption (set ENCRYPTION_KEY in production; use Fernet.generate_key() and base64)
     ENCRYPTION_KEY: str = DEV_ENCRYPTION_KEY
 
-    # Database
+    # Database (SQLite for local dev; set DATABASE_URL to postgresql://... on Railway Postgres)
     DATABASE_URL: str = "sqlite:///./database/research_data.db"
+    # Optional libpq sslmode for PostgreSQL (e.g. require) if your host needs explicit TLS
+    DATABASE_SSLMODE: str = ""
 
     # CORS (restrict to your frontend origin(s) in production)
     CORS_ORIGINS: str = "http://localhost:3000,http://localhost:5173"

@@ -34,7 +34,7 @@ AUTH_COOKIE_SECURE=true
   ```env
   DATABASE_URL=postgresql://user:password@host:5432/dbname
   ```
-  And install the driver: `pip install -r requirements.txt -r requirements-prod.txt`
+  The `psycopg2-binary` driver is included in `requirements.txt`. If your provider requires TLS, add `DATABASE_SSLMODE=require`.
 
 If you keep **SQLite** for a small deployment, ensure the `database/` directory exists and is writable.
 
